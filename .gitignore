@@ -6,3 +6,7 @@ dist/
 .env.*
 .DS_Store
 coverage/
+
+# MCP Registry publisher
+mcp-publisher
+.mcpregistry_*
