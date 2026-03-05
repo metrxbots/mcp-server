@@ -43,43 +43,7 @@ import { registerAttributionTools } from './tools/attribution.js';
 import { registerUpgradeJustificationTools } from './tools/upgrade-justification.js';
 import { registerAlertConfigTools } from './tools/alert-config.js';
 import { registerROIAuditTools } from './tools/roi-audit.js';
-
-/**
- * In-memory rate limiter using sliding window algorithm.
- * Tracks tool executions per minute.
- */
-class RateLimiter {
-  private readonly windowMs = 60 * 1000; // 1 minute
-  private readonly maxRequests = 60; // 60 requests per minute per tool
-  private readonly requests: Map<string, number[]> = new Map();
-
-  /**
-   * Check if a tool can be executed.
-   * Returns true if within rate limits, false otherwise.
-   */
-  isAllowed(toolName: string): boolean {
-    const now = Date.now();
-    const key = toolName;
-
-    if (!this.requests.has(key)) {
-      this.requests.set(key, [now]);
-      return true;
-    }
-
-    const timestamps = this.requests.get(key)!;
-
-    // Remove timestamps outside the sliding window
-    const validTimestamps = timestamps.filter((ts) => now - ts < this.windowMs);
-
-    if (validTimestamps.length < this.maxRequests) {
-      validTimestamps.push(now);
-      this.requests.set(key, validTimestamps);
-      return true;
-    }
-
-    return false;
-  }
-}
+import { RateLimiter } from './middleware/rate-limiter.js';
 
 const rateLimiter = new RateLimiter();
 

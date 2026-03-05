@@ -73,7 +73,7 @@
     "url": "https://github.com/metrxbots/mcp-server/issues"
   },
   "homepage": "https://metrxbot.com",
-  "mcpName": "com.metrxbot/mcp-server",
+  "mcpName": "io.github.metrxbots/mcp-server",
   "publishConfig": {
     "access": "public"
   },
