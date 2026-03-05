@@ -397,7 +397,7 @@ describe('MCP Server Integration', () => {
       const constants = await import('../../dist/constants');
 
       expect(constants.SERVER_NAME).toBe('metrx-mcp-server');
-      expect(constants.SERVER_VERSION).toBe('0.1.0');
+      expect(constants.SERVER_VERSION).toBe('0.1.1');
     });
 
     it('should define default API URL', async () => {
