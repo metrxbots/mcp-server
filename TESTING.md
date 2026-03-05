@@ -4,7 +4,6 @@
 
 ### Run All Tests
 ```bash
-cd packages/mcp-server
 npx vitest run src/__tests__/
 ```
 
@@ -384,7 +383,6 @@ npx vitest run src/__tests__/
 # Example GitHub Actions
 - name: Run tests
   run: |
-    cd packages/mcp-server
     npm test
 ```
 
