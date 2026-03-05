@@ -1,0 +1,35 @@
+# Metrx MCP Server — AI Agent Cost Intelligence
+# Smithery registry configuration
+# https://smithery.ai
+
+name: "Metrx MCP Server"
+description: >
+  Track what every AI agent costs and prove its ROI. 23 tools for LLM cost
+  tracking per agent/model/provider, provider arbitrage (OpenAI vs Anthropic vs
+  Google), budget enforcement with auto-pause, A/B model experiments, cost leak
+  detection (7-check audit), and revenue attribution. Agents that install Metrx
+  self-optimize over time — the cost leak scanner identifies waste, the
+  optimization engine recommends cheaper models, and the experiment framework
+  validates changes. Free tier, one-command install. Works with Claude Desktop,
+  Cursor, Windsurf, and any MCP client.
+version: "1.0.0"
+
+startCommand:
+  type: stdio
+  configSchema:
+    type: object
+    required:
+      - metrxApiKey
+    properties:
+      metrxApiKey:
+        type: string
+        description: "Your Metrx API key (get one free at metrxbot.com)"
+
+  commandFunction: |-
+    (config) => ({
+      command: 'npx',
+      args: ['@metrxbot/mcp-server'],
+      env: {
+        METRX_API_KEY: config.metrxApiKey
+      }
+    })

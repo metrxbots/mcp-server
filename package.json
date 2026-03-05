@@ -1,0 +1,86 @@
+{
+  "name": "@metrxbot/mcp-server",
+  "version": "0.1.0",
+  "description": "Metrx MCP Server — AI agent cost intelligence tools for LLM agents. Track spend, optimize models, manage budgets, detect waste, and prove ROI.",
+  "type": "module",
+  "main": "dist/index.js",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./server-factory": {
+      "types": "./dist/server-factory.d.ts",
+      "import": "./dist/server-factory.js",
+      "default": "./dist/server-factory.js"
+    }
+  },
+  "bin": {
+    "metrx-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "@vitest/ui": "^1.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^1.6.0"
+  },
+  "keywords": [
+    "mcp",
+    "mcp-server",
+    "model-context-protocol",
+    "metrx",
+    "ai-agent",
+    "llm-cost",
+    "cost-tracking",
+    "agent-observability",
+    "openai-cost",
+    "anthropic-cost",
+    "model-optimization",
+    "budget-management",
+    "cost-anomaly",
+    "roi-tracking",
+    "provider-arbitrage",
+    "token-optimization",
+    "ai-spend",
+    "finops",
+    "agent-economics",
+    "cost-leak-detection"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/metrxbots/mcp-server.git"
+  },
+  "bugs": {
+    "url": "https://github.com/metrxbots/mcp-server/issues"
+  },
+  "homepage": "https://metrxbot.com",
+  "mcpName": "com.metrxbot/mcp-server",
+  "publishConfig": {
+    "access": "public"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "server.json"
+  ]
+}
