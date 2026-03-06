@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Metrx Platform Support
+    url: https://metrxbot.com/support
+    about: For issues with the Metrx platform (not the open-source MCP server)
+  - name: MCP Documentation
+    url: https://modelcontextprotocol.io
+    about: For general MCP protocol questions

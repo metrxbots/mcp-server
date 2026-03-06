@@ -12,7 +12,7 @@ description: >
   optimization engine recommends cheaper models, and the experiment framework
   validates changes. Free tier, one-command install. Works with Claude Desktop,
   Cursor, Windsurf, and any MCP client.
-version: "0.1.0"
+version: "0.1.2"
 
 startCommand:
   type: stdio
