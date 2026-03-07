@@ -627,3 +627,285 @@ describe('Input Validation', () => {
     expect(schema.max_duration_days).toBeDefined();
   });
 });
+
+// ── Model Pricing Data (Issue #2) ──────────────────────────────────────────────
+
+import {
+  MODEL_PRICING,
+  getModelPricing,
+  getModelsByProvider,
+  getCoveredProviders,
+} from '../../dist/tools/model-pricing';
+
+describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
+  it('should include mistral-large in MODEL_PRICING', () => {
+    expect(MODEL_PRICING['mistral-large']).toBeDefined();
+    expect(MODEL_PRICING['mistral-large'].provider).toBe('mistral');
+    expect(MODEL_PRICING['mistral-large'].tier).toBe('frontier');
+    expect(MODEL_PRICING['mistral-large'].input_cost_per_1m).toBeGreaterThan(0);
+  });
+
+  it('should include mistral-medium in MODEL_PRICING', () => {
+    expect(MODEL_PRICING['mistral-medium']).toBeDefined();
+    expect(MODEL_PRICING['mistral-medium'].provider).toBe('mistral');
+    expect(MODEL_PRICING['mistral-medium'].tier).toBe('balanced');
+  });
+
+  it('should include mistral-small in MODEL_PRICING', () => {
+    expect(MODEL_PRICING['mistral-small']).toBeDefined();
+    expect(MODEL_PRICING['mistral-small'].provider).toBe('mistral');
+    expect(MODEL_PRICING['mistral-small'].tier).toBe('efficient');
+  });
+
+  it('should include codestral in MODEL_PRICING', () => {
+    expect(MODEL_PRICING['codestral']).toBeDefined();
+    expect(MODEL_PRICING['codestral'].provider).toBe('mistral');
+    expect(MODEL_PRICING['codestral'].tier).toBe('efficient');
+  });
+
+  it('should include command-r-plus in MODEL_PRICING', () => {
+    expect(MODEL_PRICING['command-r-plus']).toBeDefined();
+    expect(MODEL_PRICING['command-r-plus'].provider).toBe('cohere');
+    expect(MODEL_PRICING['command-r-plus'].tier).toBe('frontier');
+  });
+
+  it('should include command-r in MODEL_PRICING', () => {
+    expect(MODEL_PRICING['command-r']).toBeDefined();
+    expect(MODEL_PRICING['command-r'].provider).toBe('cohere');
+    expect(MODEL_PRICING['command-r'].tier).toBe('balanced');
+  });
+
+  it('should include embed-english-v3 with zero output cost (embedding-only)', () => {
+    const entry = MODEL_PRICING['embed-english-v3'];
+    expect(entry).toBeDefined();
+    expect(entry.provider).toBe('cohere');
+    expect(entry.output_cost_per_1m).toBe(0);
+    expect(entry.context_window).toBe(512);
+  });
+
+  it('getModelPricing should resolve mistral-large-latest alias', () => {
+    const entry = getModelPricing('mistral-large-latest');
+    expect(entry).toBeDefined();
+    expect(entry!.model).toBe('mistral-large');
+    expect(entry!.provider).toBe('mistral');
+  });
+
+  it('getModelPricing should resolve mistral-small-latest alias', () => {
+    const entry = getModelPricing('mistral-small-latest');
+    expect(entry).toBeDefined();
+    expect(entry!.model).toBe('mistral-small');
+  });
+
+  it('getModelPricing should resolve codestral-latest alias', () => {
+    const entry = getModelPricing('codestral-latest');
+    expect(entry).toBeDefined();
+    expect(entry!.model).toBe('codestral');
+  });
+
+  it('getModelPricing should resolve command-r-plus-08-2024 alias', () => {
+    const entry = getModelPricing('command-r-plus-08-2024');
+    expect(entry).toBeDefined();
+    expect(entry!.model).toBe('command-r-plus');
+  });
+
+  it('getModelPricing should resolve embed-english-v3.0 alias', () => {
+    const entry = getModelPricing('embed-english-v3.0');
+    expect(entry).toBeDefined();
+    expect(entry!.model).toBe('embed-english-v3');
+  });
+
+  it('getModelPricing should return undefined for unknown model', () => {
+    expect(getModelPricing('unknown-model-xyz')).toBeUndefined();
+  });
+
+  it('getModelsByProvider should return all mistral models', () => {
+    const models = getModelsByProvider('mistral');
+    const names = models.map((m) => m.model);
+    expect(names).toContain('mistral-large');
+    expect(names).toContain('mistral-medium');
+    expect(names).toContain('mistral-small');
+    expect(names).toContain('codestral');
+  });
+
+  it('getModelsByProvider should return all cohere models', () => {
+    const models = getModelsByProvider('cohere');
+    const names = models.map((m) => m.model);
+    expect(names).toContain('command-r-plus');
+    expect(names).toContain('command-r');
+    expect(names).toContain('embed-english-v3');
+  });
+
+  it('getCoveredProviders should include mistral and cohere', () => {
+    const providers = getCoveredProviders();
+    expect(providers).toContain('mistral');
+    expect(providers).toContain('cohere');
+  });
+
+  it('getCoveredProviders should return sorted array', () => {
+    const providers = getCoveredProviders();
+    const sorted = [...providers].sort();
+    expect(providers).toEqual(sorted);
+  });
+
+  it('getCoveredProviders should include all 5 expected providers', () => {
+    const providers = getCoveredProviders();
+    expect(providers).toContain('openai');
+    expect(providers).toContain('anthropic');
+    expect(providers).toContain('google');
+    expect(providers).toContain('mistral');
+    expect(providers).toContain('cohere');
+  });
+});
+
+// ── output_format=json for run_cost_leak_scan (Issue #3) ──────────────────────
+
+describe('run_cost_leak_scan output_format=json (Issue #3)', () => {
+  let mockServer: ReturnType<typeof createMockServer>;
+  let mockClient: MetrxApiClient;
+  let scanHandler: (...args: any[]) => Promise<any>;
+
+  beforeEach(() => {
+    mockServer = createMockServer();
+    mockClient = createMockClient();
+    registerCostLeakDetectorTools(mockServer as any, mockClient);
+
+    const calls = (mockServer.registerTool as any).mock.calls;
+    const scanCall = calls.find(([name]: [string]) => name === 'run_cost_leak_scan');
+    scanHandler = scanCall[2];
+  });
+
+  it('output_format=json with API error returns JSON error object and isError:true', async () => {
+    (mockClient.get as any).mockResolvedValue({ error: 'unauthorized' });
+
+    const result = await scanHandler({ output_format: 'json' });
+
+    expect(result.isError).toBe(true);
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveProperty('error', 'unauthorized');
+  });
+
+  it('output_format=json with missing report returns status:computing JSON', async () => {
+    (mockClient.get as any).mockResolvedValue({ data: {} });
+
+    const result = await scanHandler({ output_format: 'json' });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed).toHaveProperty('status', 'computing');
+    expect(parsed).toHaveProperty('message');
+  });
+
+  it('output_format=json with valid report returns raw CostLeakReport JSON', async () => {
+    const mockReport = {
+      scan_timestamp: '2025-01-01T00:00:00Z',
+      total_agents_scanned: 3,
+      total_leaks_found: 1,
+      total_estimated_waste_monthly_cents: 5000,
+      findings: [],
+      health_score: 85,
+    };
+    (mockClient.get as any).mockResolvedValue({
+      data: { cost_leak_report: mockReport },
+    });
+
+    const result = await scanHandler({ output_format: 'json' });
+
+    expect(result.isError).toBeFalsy();
+    const parsed = JSON.parse(result.content[0].text);
+    expect(parsed.scan_timestamp).toBe('2025-01-01T00:00:00Z');
+    expect(parsed.total_agents_scanned).toBe(3);
+    expect(parsed.health_score).toBe(85);
+  });
+
+  it('output_format=text (default) with valid report returns markdown', async () => {
+    const mockReport = {
+      scan_timestamp: '2025-01-01T00:00:00Z',
+      total_agents_scanned: 2,
+      total_leaks_found: 0,
+      total_estimated_waste_monthly_cents: 0,
+      findings: [],
+      health_score: 100,
+    };
+    (mockClient.get as any).mockResolvedValue({
+      data: { cost_leak_report: mockReport },
+    });
+
+    const result = await scanHandler({ output_format: 'text' });
+
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('Cost Leak Scan Report');
+    expect(result.content[0].text).not.toMatch(/^\s*\{/); // not JSON
+  });
+
+  it('omitting output_format defaults to text (markdown) output', async () => {
+    const mockReport = {
+      scan_timestamp: '2025-01-01T00:00:00Z',
+      total_agents_scanned: 1,
+      total_leaks_found: 0,
+      total_estimated_waste_monthly_cents: 0,
+      findings: [],
+      health_score: 95,
+    };
+    (mockClient.get as any).mockResolvedValue({
+      data: { cost_leak_report: mockReport },
+    });
+
+    const result = await scanHandler({});
+
+    expect(result.content[0].text).toContain('Cost Leak Scan Report');
+  });
+
+  it('output_format=json with API error does NOT return markdown', async () => {
+    (mockClient.get as any).mockResolvedValue({ error: 'rate_limited' });
+
+    const result = await scanHandler({ output_format: 'json' });
+
+    expect(() => JSON.parse(result.content[0].text)).not.toThrow();
+    expect(result.content[0].text).not.toContain('##');
+  });
+});
+
+// ── run_cost_leak_scan description mentions all providers (Issue #2) ──────────
+
+describe('run_cost_leak_scan tool description mentions covered providers', () => {
+  let mockServer: ReturnType<typeof createMockServer>;
+  let mockClient: MetrxApiClient;
+
+  beforeEach(() => {
+    mockServer = createMockServer();
+    mockClient = createMockClient();
+    registerCostLeakDetectorTools(mockServer as any, mockClient);
+  });
+
+  it('description should mention mistral as a covered provider', () => {
+    const calls = (mockServer.registerTool as any).mock.calls;
+    const scanCall = calls.find(([name]: [string]) => name === 'run_cost_leak_scan');
+    const description: string = scanCall[1].description;
+
+    expect(description.toLowerCase()).toContain('mistral');
+  });
+
+  it('description should mention cohere as a covered provider', () => {
+    const calls = (mockServer.registerTool as any).mock.calls;
+    const scanCall = calls.find(([name]: [string]) => name === 'run_cost_leak_scan');
+    const description: string = scanCall[1].description;
+
+    expect(description.toLowerCase()).toContain('cohere');
+  });
+
+  it('description should mention json output format', () => {
+    const calls = (mockServer.registerTool as any).mock.calls;
+    const scanCall = calls.find(([name]: [string]) => name === 'run_cost_leak_scan');
+    const description: string = scanCall[1].description;
+
+    expect(description).toContain('json');
+  });
+
+  it('run_cost_leak_scan should have output_format in inputSchema', () => {
+    const calls = (mockServer.registerTool as any).mock.calls;
+    const scanCall = calls.find(([name]: [string]) => name === 'run_cost_leak_scan');
+    const schema = scanCall[1].inputSchema;
+
+    expect(schema.output_format).toBeDefined();
+  });
+});
