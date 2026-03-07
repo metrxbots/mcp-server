@@ -1,6 +1,6 @@
 # Metrx MCP Server
 
-<!-- mcp-name: com.metrxbot/mcp-server -->
+<!-- mcp-name: io.github.metrxbots/mcp-server -->
 
 [![npm version](https://img.shields.io/npm/v/@metrxbot/mcp-server)](https://www.npmjs.com/package/@metrxbot/mcp-server)
 [![CI](https://github.com/metrxbots/mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/metrxbots/mcp-server/actions/workflows/ci.yml)

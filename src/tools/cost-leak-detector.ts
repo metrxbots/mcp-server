@@ -192,6 +192,29 @@ function formatCostLeakReport(report: CostLeakReport, includeLow: boolean): stri
     lines.push('Use apply_optimization to auto-fix these issues.');
   }
 
+  // Upgrade CTA — drives CLI users to the full platform
+  lines.push('');
+  lines.push('---');
+  lines.push('');
+  lines.push('### 📊 Want continuous monitoring?');
+  lines.push(
+    'This scan is a one-time snapshot. Metrx gives you **real-time cost tracking**, ' +
+    'automatic alerts when spend spikes, and per-agent ROI attribution.'
+  );
+  lines.push('');
+
+  const wasteDollars = report.total_estimated_waste_monthly_cents / 100;
+  if (wasteDollars >= 100) {
+    lines.push(
+      `You\'re leaving ~$${Math.round(wasteDollars)}/mo on the table. ` +
+      'Metrx pays for itself in the first week.'
+    );
+    lines.push('');
+  }
+
+  lines.push('→ **Start free**: https://metrxbot.com');
+  lines.push('→ Connect your agents in 2 minutes with the MCP server or SDK');
+
   return lines.join('\n');
 }
 
