@@ -22,6 +22,7 @@ import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetrxApiClient } from '../services/api-client.js';
 import { formatCents } from '../services/formatters.js';
+import { getCoveredProviders } from './model-pricing.js';
 
 interface LeakFinding {
   check: string;
@@ -52,8 +53,9 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
         'Run a comprehensive cost leak audit across your entire agent fleet. ' +
         'Identifies 7 types of cost inefficiencies: idle agents, model overprovisioning, ' +
         'missing caching, high error rates, context bloat, missing budgets, and ' +
-        'cross-provider arbitrage opportunities. Returns a scored report with ' +
-        'fix recommendations and estimated monthly savings. ' +
+        `cross-provider arbitrage opportunities (covers ${getCoveredProviders().join(', ')}). ` +
+        'Returns a scored report with fix recommendations and estimated monthly savings. ' +
+        'Supports output_format="json" for machine-readable output in CI/CD pipelines. ' +
         'Do NOT use as a continuous monitoring loop — use configure_alert_threshold for ongoing monitoring. ' +
         'Do NOT use for fixing leaks — use apply_optimization for one-click fixes.',
       inputSchema: {
@@ -66,6 +68,14 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
           .boolean()
           .default(false)
           .describe('Include low-severity findings in the report'),
+        output_format: z
+          .enum(['text', 'json'])
+          .default('text')
+          .optional()
+          .describe(
+            'Output format: "text" (default) returns a human-readable markdown report; ' +
+              '"json" returns raw machine-readable JSON suitable for CI/CD pipelines and programmatic processing.'
+          ),
       },
       annotations: {
         readOnlyHint: true,
@@ -74,7 +84,9 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
         openWorldHint: false,
       },
     },
-    async ({ agent_id, include_low_severity }) => {
+    async ({ agent_id, include_low_severity, output_format }) => {
+      const fmt = output_format ?? 'text';
+
       // Fetch fleet data from the API
       const params: Record<string, string> = {
         include_optimization: 'true',
@@ -87,6 +99,17 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
       }>('/dashboard', params);
 
       if (result.error) {
+        if (fmt === 'json') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify({ error: result.error }, null, 2),
+              },
+            ],
+            isError: true,
+          };
+        }
         return {
           content: [{ type: 'text', text: `Error running cost leak scan: ${result.error}` }],
           isError: true,
@@ -97,6 +120,25 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
       if (!report) {
         // If the API doesn't support cost leak scanning yet,
         // return a helpful message
+        if (fmt === 'json') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: JSON.stringify(
+                  {
+                    status: 'computing',
+                    message:
+                      'Cost leak scanning is being computed. Please check back in a few minutes, ' +
+                      'or use get_optimization_recommendations for individual agent analysis.',
+                  },
+                  null,
+                  2
+                ),
+              },
+            ],
+          };
+        }
         return {
           content: [
             {
@@ -106,6 +148,12 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
                 'or use get_optimization_recommendations for individual agent analysis.',
             },
           ],
+        };
+      }
+
+      if (fmt === 'json') {
+        return {
+          content: [{ type: 'text', text: JSON.stringify(report, null, 2) }],
         };
       }
 

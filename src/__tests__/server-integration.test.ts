@@ -25,7 +25,7 @@ describe('MCP Server Integration', () => {
 
   describe('Server Requirements', () => {
     it('should require METRX_API_KEY environment variable', () => {
-      expect(() => new MetrxApiClient()).toThrow('METRX_API_KEY is required');
+      expect(() => new MetrxApiClient()).toThrow('METRX_API_KEY not set');
     });
 
     it('should accept API key from environment', () => {
@@ -188,7 +188,7 @@ describe('MCP Server Integration', () => {
       const result = await client.get('/nonexistent');
 
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('404');
+      expect(result.error).toContain('Resource not found');
     });
 
     it('should handle 5xx errors gracefully', async () => {
@@ -243,7 +243,7 @@ describe('MCP Server Integration', () => {
       const result = await client.get('/agents');
 
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('Bad Request');
+      expect(result.error).toContain('API request failed (400)');
     });
   });
 

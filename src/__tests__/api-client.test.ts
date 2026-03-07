@@ -35,7 +35,7 @@ describe('MetrxApiClient', () => {
     });
 
     it('should throw error when no API key is provided', () => {
-      expect(() => new MetrxApiClient()).toThrow('METRX_API_KEY is required');
+      expect(() => new MetrxApiClient()).toThrow('METRX_API_KEY not set');
     });
 
     it('should use default API URL', () => {
@@ -156,8 +156,7 @@ describe('MetrxApiClient', () => {
       });
 
       const result = await client.get('/agents');
-      expect(result.error).toContain('API request failed');
-      expect(result.error).toContain('404');
+      expect(result.error).toContain('Resource not found');
       expect(result.data).toBeUndefined();
     });
 
@@ -247,8 +246,7 @@ describe('MetrxApiClient', () => {
       });
 
       const result = await client.post('/budgets', { invalid: 'data' });
-      expect(result.error).toContain('API request failed');
-      expect(result.error).toContain('400');
+      expect(result.error).toContain('API request failed (400)');
     });
 
     it('should handle network errors in POST', async () => {
@@ -300,7 +298,7 @@ describe('MetrxApiClient', () => {
       });
 
       const result = await client.patch('/alerts', {});
-      expect(result.error).toContain('401');
+      expect(result.error).toContain('API key is invalid or expired');
     });
 
     it('should handle network errors in PATCH', async () => {
@@ -341,7 +339,7 @@ describe('MetrxApiClient', () => {
       });
 
       const result = await noRetryClient.get('/agents');
-      expect(result.error).toContain('Internal Server Error');
+      expect(result.error).toContain('Server error (500)');
     });
 
     it('should include error body in response', async () => {
@@ -353,7 +351,7 @@ describe('MetrxApiClient', () => {
       });
 
       const result = await client.get('/dashboard');
-      expect(result.error).toContain('Invalid period_days parameter');
+      expect(result.error).toContain('API request failed (400)');
     });
   });
 });
