@@ -11,6 +11,10 @@
 import { DEFAULT_API_URL } from '../constants.js';
 import type { ApiResponse } from '../types.js';
 
+// API Docs URL for error messages
+const API_DOCS_URL = 'https://docs.metrxbot.com';
+const API_KEY_SETTINGS_URL = 'https://metrxbot.com/settings/api';
+
 export class MetrxApiClient {
   private readonly baseUrl: string;
   private readonly apiKey: string;
@@ -23,8 +27,52 @@ export class MetrxApiClient {
 
     if (!this.apiKey) {
       throw new Error(
-        'METRX_API_KEY is required. Set it as an environment variable or pass it to the constructor.'
+        `METRX_API_KEY not set. Get yours at ${API_KEY_SETTINGS_URL}`
       );
+    }
+  }
+
+  /**
+   * Parse API error response and return user-friendly message
+   */
+  private parseApiError(status: number, errorBody: string): string {
+    // Try to parse error response
+    try {
+      const parsed = JSON.parse(errorBody);
+      
+      // Handle specific error types
+      if (parsed.error?.code === 'INVALID_API_KEY' || parsed.error?.code === 'EXPIRED_API_KEY') {
+        return `API key is invalid or expired. Generate a new one at ${API_KEY_SETTINGS_URL}`;
+      }
+      
+      if (parsed.error?.code === 'RATE_LIMITED') {
+        const retryAfter = parsed.error?.retryAfter || 60;
+        return `Rate limited. Please try again in ${retryAfter} seconds. Learn more at ${API_DOCS_URL}/rate-limiting`;
+      }
+      
+      if (parsed.error?.message) {
+        return `${parsed.error.message}. See ${API_DOCS_URL} for help`;
+      }
+    } catch {
+      // Not JSON, use status-based messages
+    }
+
+    // Status-based fallback messages
+    switch (status) {
+      case 401:
+        return `API key is invalid or expired. Generate a new one at ${API_KEY_SETTINGS_URL}`;
+      case 403:
+        return `Access forbidden. Check your API key permissions at ${API_KEY_SETTINGS_URL}`;
+      case 404:
+        return `Resource not found. Check your request URL. See ${API_DOCS_URL}`;
+      case 429:
+        return `Rate limited. Please try again later. Learn more at ${API_DOCS_URL}/rate-limiting`;
+      case 500:
+      case 502:
+      case 503:
+        return `Server error (${status}). Please try again later. See ${API_DOCS_URL}`;
+      default:
+        return `API request failed (${status}). See ${API_DOCS_URL} for help`;
     }
   }
 
@@ -107,8 +155,9 @@ export class MetrxApiClient {
 
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
+        const friendlyMessage = this.parseApiError(response.status, errorBody);
         return {
-          error: `API request failed (${response.status}): ${errorBody || response.statusText}`,
+          error: friendlyMessage,
         };
       }
 
@@ -122,7 +171,7 @@ export class MetrxApiClient {
       return { data: data as T };
     } catch (err) {
       return {
-        error: `Network error: ${err instanceof Error ? err.message : String(err)}`,
+        error: `Network error: ${err instanceof Error ? err.message : String(err)}. See ${API_DOCS_URL} for help`,
       };
     }
   }
@@ -146,8 +195,9 @@ export class MetrxApiClient {
 
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
+        const friendlyMessage = this.parseApiError(response.status, errorBody);
         return {
-          error: `API request failed (${response.status}): ${errorBody || response.statusText}`,
+          error: friendlyMessage,
         };
       }
 
@@ -160,7 +210,7 @@ export class MetrxApiClient {
       return { data: data as T };
     } catch (err) {
       return {
-        error: `Network error: ${err instanceof Error ? err.message : String(err)}`,
+        error: `Network error: ${err instanceof Error ? err.message : String(err)}. See ${API_DOCS_URL} for help`,
       };
     }
   }
@@ -184,8 +234,9 @@ export class MetrxApiClient {
 
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
+        const friendlyMessage = this.parseApiError(response.status, errorBody);
         return {
-          error: `API request failed (${response.status}): ${errorBody || response.statusText}`,
+          error: friendlyMessage,
         };
       }
 
@@ -198,7 +249,7 @@ export class MetrxApiClient {
       return { data: data as T };
     } catch (err) {
       return {
-        error: `Network error: ${err instanceof Error ? err.message : String(err)}`,
+        error: `Network error: ${err instanceof Error ? err.message : String(err)}. See ${API_DOCS_URL} for help`,
       };
     }
   }
