@@ -201,3 +201,14 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 ## License
 
 MIT — see [LICENSE](./LICENSE).
+
+
+## 💬 Feedback
+
+Did Metrx work for you? We'd love to hear it — good or bad.
+
+- **GitHub Discussions**: [Start a thread](https://github.com/metrxbots/mcp-server/discussions) — questions, ideas, what you're building
+- **Bug reports**: [Open an issue](https://github.com/metrxbots/mcp-server/issues)
+- **Quick feedback**: Drop a comment on our [Product Hunt listing](https://www.producthunt.com/products/metrx)
+
+If you installed but hit a snag, tell us what happened — we read every report.
