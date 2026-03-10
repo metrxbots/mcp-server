@@ -6,6 +6,7 @@
 [![CI](https://github.com/metrxbots/mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/metrxbots/mcp-server/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![Smithery](https://smithery.ai/badge/@metrxbot/mcp-server)](https://smithery.ai/server/metrxbot/mcp-server)
+[![Glama](https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server/badge)](https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server)
 
 **Your AI agents are wasting money.** Metrx finds out how much, and fixes it.
 
@@ -39,7 +40,17 @@ The official [MCP server](https://modelcontextprotocol.io) for [Metrx](https://m
 }
 ```
 
-Get your free API key at [metrxbot.com/settings/security](https://metrxbot.com/settings/security).
+Get your free API key at [app.metrxbot.com/sign-up](https://app.metrxbot.com/sign-up).
+
+### Verify your setup
+
+After installing, verify your API key works:
+
+```bash
+METRX_API_KEY=sk_live_your_key_here npx @metrxbot/mcp-server --test
+```
+
+You should see `✓ Connection successful!` and a ready-to-paste MCP client config.
 
 ### Remote HTTP endpoint
 
@@ -169,7 +180,7 @@ Check back in 14 days for statistical significance.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `METRX_API_KEY` | Yes | Your Metrx API key ([get one free](https://metrxbot.com/settings/security)) |
+| `METRX_API_KEY` | Yes | Your Metrx API key ([get one free](https://app.metrxbot.com/sign-up)) |
 | `METRX_API_URL` | No | Override API base URL (default: `https://metrxbot.com/api/v1`) |
 
 ## Rate Limiting
