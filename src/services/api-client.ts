@@ -13,7 +13,8 @@ import type { ApiResponse } from '../types.js';
 
 // API Docs URL for error messages
 const API_DOCS_URL = 'https://docs.metrxbot.com';
-const API_KEY_SETTINGS_URL = 'https://metrxbot.com/settings/api';
+const API_KEY_SETTINGS_URL = 'https://app.metrxbot.com/settings/security';
+const ONBOARD_URL = 'https://app.metrxbot.com/sign-up';
 
 export class MetrxApiClient {
   private readonly baseUrl: string;
@@ -27,7 +28,10 @@ export class MetrxApiClient {
 
     if (!this.apiKey) {
       throw new Error(
-        `METRX_API_KEY not set. Get yours at ${API_KEY_SETTINGS_URL}`
+        `METRX_API_KEY not set.\n` +
+        `  Sign up free: ${ONBOARD_URL}\n` +
+        `  Manage keys:  ${API_KEY_SETTINGS_URL}\n` +
+        `  Then test:    METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test`
       );
     }
   }
@@ -146,7 +150,7 @@ export class MetrxApiClient {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.1.0',
+          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
         },
       });
 
@@ -185,7 +189,7 @@ export class MetrxApiClient {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.1.0',
+          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -224,7 +228,7 @@ export class MetrxApiClient {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.1.0',
+          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -247,6 +251,40 @@ export class MetrxApiClient {
     } catch (err) {
       return {
         error: `Network error: ${err instanceof Error ? err.message : String(err)}. See ${API_DOCS_URL} for help`,
+      };
+    }
+  }
+
+  /**
+   * Lightweight ping to verify API key is valid.
+   * Used by the `--test` CLI flag.
+   * Attempts a HEAD request first, falls back to GET on the base URL.
+   * Returns { ok: true } on success, or { ok: false, error: string } on failure.
+   */
+  async ping(): Promise<{ ok: boolean; error?: string }> {
+    const url = new URL('/api/v1/agents', this.baseUrl);
+
+    try {
+      const response = await fetch(url.toString(), {
+        method: 'GET',
+        headers: {
+          Authorization: `Bearer ${this.apiKey}`,
+          'Content-Type': 'application/json',
+          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
+        },
+      });
+
+      if (response.ok) {
+        return { ok: true };
+      }
+
+      const errorBody = await response.text().catch(() => '');
+      const friendlyMessage = this.parseApiError(response.status, errorBody);
+      return { ok: false, error: friendlyMessage };
+    } catch (err) {
+      return {
+        ok: false,
+        error: `Network error: ${err instanceof Error ? err.message : String(err)}`,
       };
     }
   }

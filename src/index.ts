@@ -46,9 +46,77 @@ import { registerAlertConfigTools } from './tools/alert-config.js';
 import { registerROIAuditTools } from './tools/roi-audit.js';
 import { RateLimiter } from './middleware/rate-limiter.js';
 
+// ── --test flag: verify API key before stdio transport takes over ──
+// Must run before anything touches stdin/stdout.
+if (process.argv.includes('--test')) {
+  (async () => {
+    const RESET = '\x1b[0m';
+    const BOLD = '\x1b[1m';
+    const GREEN = '\x1b[32m';
+    const RED = '\x1b[31m';
+    const CYAN = '\x1b[36m';
+    const DIM = '\x1b[2m';
+
+    console.log(`\n${CYAN}${BOLD}Metrx MCP Server — Connection Test${RESET}\n`);
+    console.log(`  Version: ${SERVER_VERSION}`);
+
+    // Check API key is present
+    const apiKey = process.env.METRX_API_KEY;
+    if (!apiKey) {
+      console.log(`\n  ${RED}✗ METRX_API_KEY not set${RESET}`);
+      console.log(`\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up${RESET}`);
+      console.log(`  Manage keys:   ${CYAN}https://app.metrxbot.com/settings/security${RESET}`);
+      console.log(`\n  ${DIM}Usage: METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test${RESET}\n`);
+      process.exit(1);
+    }
+
+    // Validate key format
+    if (!apiKey.startsWith('sk_live_') && !apiKey.startsWith('sk_test_')) {
+      console.log(`  ${RED}✗ API key format looks wrong${RESET} (expected sk_live_… or sk_test_…)`);
+      console.log(`\n  Get a valid key at: ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
+      process.exit(1);
+    }
+    console.log(`  API Key: ${DIM}${apiKey.slice(0, 12)}…${apiKey.slice(-4)}${RESET}`);
+
+    // Attempt API ping
+    console.log(`\n  Connecting to Metrx API…`);
+    try {
+      const client = new MetrxApiClient();
+      const result = await client.ping();
+
+      if (result.ok) {
+        console.log(`  ${GREEN}${BOLD}✓ Connection successful!${RESET}`);
+        console.log(`\n  Your MCP server is ready to use. Add this to your MCP client config:`);
+        console.log(`\n  ${DIM}{`);
+        console.log(`    "mcpServers": {`);
+        console.log(`      "metrx": {`);
+        console.log(`        "command": "npx",`);
+        console.log(`        "args": ["@metrxbot/mcp-server"],`);
+        console.log(`        "env": { "METRX_API_KEY": "${apiKey}" }`);
+        console.log(`      }`);
+        console.log(`    }`);
+        console.log(`  }${RESET}\n`);
+        process.exit(0);
+      } else {
+        console.log(`  ${RED}✗ Connection failed: ${result.error}${RESET}\n`);
+        process.exit(1);
+      }
+    } catch (err) {
+      console.log(`  ${RED}✗ ${err instanceof Error ? err.message : String(err)}${RESET}\n`);
+      process.exit(1);
+    }
+  })();
+} else {
+  // Normal server startup
+  runServer().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}
+
 const rateLimiter = new RateLimiter();
 
-async function main(): Promise<void> {
+async function runServer(): Promise<void> {
   // Initialize the API client
   // Throws if METRX_API_KEY is not set
   let apiClient: MetrxApiClient;
@@ -58,9 +126,11 @@ async function main(): Promise<void> {
     console.error(
       'Error: METRX_API_KEY environment variable is required.\n' +
         'Set it before starting the server:\n' +
-        '  METRX_API_KEY=sk_metrx_xxx npx @metrxbot/mcp-server\n' +
+        '  METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server\n' +
         '\n' +
-        'Get your API key from https://metrxbot.com/settings/security'
+        'Sign up free: https://app.metrxbot.com/sign-up\n' +
+        'Manage keys:  https://app.metrxbot.com/settings/security\n' +
+        'Test:         METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test'
     );
     process.exit(1);
   }
@@ -224,7 +294,5 @@ async function main(): Promise<void> {
   });
 }
 
-main().catch((err) => {
-  console.error('Fatal error:', err);
-  process.exit(1);
-});
+// Note: runServer() is called conditionally above (only when --test is NOT passed).
+// If --test is passed, the IIFE handles it and exits before reaching here.

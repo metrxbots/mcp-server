@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.3] - 2026-03-09
+
+### Added
+- `--test` CLI flag for API key verification before starting stdio transport (`npx @metrxbot/mcp-server --test`)
+- `ping()` method on `MetrxApiClient` for lightweight connectivity checks
+- `scripts/postinstall.cjs` — friendly welcome banner after `npm install` with signup and test instructions (CI-safe, non-blocking)
+
+### Fixed
+- Fixed all API key management URLs to point to `https://app.metrxbot.com/settings/security` (was pointing to non-existent `/settings/api-keys`)
+- Fixed signup URL to `https://app.metrxbot.com/sign-up` (was pointing to non-existent `/onboard`)
+- `X-MCP-Client` header now correctly reports `metrx-mcp-server/0.1.3` (was stuck at `0.1.0`)
+- Improved missing-API-key error message with actionable signup and test instructions
+
+### Changed
+- Renamed `main()` to `runServer()` in `index.ts` for clarity
+- Added `scripts/` directory to npm package `files` array
+
 ## [0.1.2] - 2026-03-05
 
 ### Fixed

@@ -147,7 +147,7 @@ describe('MCP Server Integration', () => {
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
-            'X-MCP-Client': 'metrx-mcp-server/0.1.0',
+            'X-MCP-Client': 'metrx-mcp-server/0.1.3',
           }),
         })
       );
@@ -397,7 +397,7 @@ describe('MCP Server Integration', () => {
       const constants = await import('../../dist/constants');
 
       expect(constants.SERVER_NAME).toBe('metrx-mcp-server');
-      expect(constants.SERVER_VERSION).toBe('0.1.2');
+      expect(constants.SERVER_VERSION).toBe('0.1.3');
     });
 
     it('should define default API URL', async () => {
