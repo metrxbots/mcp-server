@@ -40,7 +40,7 @@ The official [MCP server](https://modelcontextprotocol.io) for [Metrx](https://m
 }
 ```
 
-Get your free API key at [app.metrxbot.com/sign-up](https://app.metrxbot.com/sign-up).
+Get your free API key at [app.metrxbot.com/sign-up](https://app.metrxbot.com/sign-up?source=mcp).
 
 ### Verify your setup
 
@@ -180,12 +180,22 @@ Check back in 14 days for statistical significance.
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `METRX_API_KEY` | Yes | Your Metrx API key ([get one free](https://app.metrxbot.com/sign-up)) |
+| `METRX_API_KEY` | Yes | Your Metrx API key ([get one free](https://app.metrxbot.com/sign-up?source=mcp)) |
 | `METRX_API_URL` | No | Override API base URL (default: `https://metrxbot.com/api/v1`) |
 
 ## Rate Limiting
 
-60 requests per minute per tool. For higher limits, contact support@metrxbot.com.
+Client-side rate limiting is applied per tool category using a sliding window:
+
+| Category | Tools | Limit |
+|----------|-------|-------|
+| Read (dashboard, agents) | `get_cost_summary`, `list_agents` | 60/min |
+| Read (metrics, default) | `get_attribution_report`, `get_failure_predictions`, … | 30/min |
+| Write (experiments, budgets, alerts) | `create_budget`, `start_experiment`, `create_alert_policy`, … | 10/min |
+| Optimization | `get_provider_arbitrage`, `get_model_recommendations`, … | 5/min |
+| Cost-leak scan | `scan_cost_leaks` | 2 per 5 min |
+
+Rate-limited requests return an error with `retryAfter` indicating when to retry. For higher limits, contact support@metrxbot.com.
 
 ## Development
 
