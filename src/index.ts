@@ -64,15 +64,17 @@ if (process.argv.includes('--test')) {
     const apiKey = process.env.METRX_API_KEY;
     if (!apiKey) {
       console.log(`\n  ${RED}✗ METRX_API_KEY not set${RESET}`);
-      console.log(`\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up${RESET}`);
+      console.log(`\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up?source=mcp${RESET}`);
       console.log(`  Manage keys:   ${CYAN}https://app.metrxbot.com/settings/security${RESET}`);
       console.log(`\n  ${DIM}Usage: METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test${RESET}\n`);
       process.exit(1);
     }
 
     // Validate key format
-    if (!apiKey.startsWith('sk_live_') && !apiKey.startsWith('sk_test_')) {
-      console.log(`  ${RED}✗ API key format looks wrong${RESET} (expected sk_live_… or sk_test_…)`);
+    const validPrefixes = ['sk_live_', 'sk_test_', 'mk_'];
+    const hasValidPrefix = validPrefixes.some((p) => apiKey.startsWith(p));
+    if (!hasValidPrefix) {
+      console.log(`  ${RED}✗ API key format looks wrong${RESET} (expected sk_live_…, sk_test_…, or mk_…)`);
       console.log(`\n  Get a valid key at: ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
       process.exit(1);
     }
@@ -86,16 +88,41 @@ if (process.argv.includes('--test')) {
 
       if (result.ok) {
         console.log(`  ${GREEN}${BOLD}✓ Connection successful!${RESET}`);
-        console.log(`\n  Your MCP server is ready to use. Add this to your MCP client config:`);
-        console.log(`\n  ${DIM}{`);
+        console.log(`\n  Your MCP server is ready. Add to your client config:\n`);
+
+        // Shared config snippet
+        const mcpBlock = [
+          `    "metrx": {`,
+          `      "command": "npx",`,
+          `      "args": ["@metrxbot/mcp-server"],`,
+          `      "env": { "METRX_API_KEY": "${apiKey}" }`,
+          `    }`,
+        ].join('\n');
+
+        // Claude Desktop
+        console.log(`  ${BOLD}Claude Desktop${RESET} ${DIM}(~/Library/Application Support/Claude/claude_desktop_config.json)${RESET}`);
+        console.log(`  ${DIM}{`);
         console.log(`    "mcpServers": {`);
-        console.log(`      "metrx": {`);
-        console.log(`        "command": "npx",`);
-        console.log(`        "args": ["@metrxbot/mcp-server"],`);
-        console.log(`        "env": { "METRX_API_KEY": "${apiKey}" }`);
-        console.log(`      }`);
+        console.log(mcpBlock);
         console.log(`    }`);
         console.log(`  }${RESET}\n`);
+
+        // Cursor
+        console.log(`  ${BOLD}Cursor${RESET} ${DIM}(~/.cursor/mcp.json)${RESET}`);
+        console.log(`  ${DIM}{`);
+        console.log(`    "mcpServers": {`);
+        console.log(mcpBlock);
+        console.log(`    }`);
+        console.log(`  }${RESET}\n`);
+
+        // Windsurf
+        console.log(`  ${BOLD}Windsurf${RESET} ${DIM}(~/.codeium/windsurf/mcp_config.json)${RESET}`);
+        console.log(`  ${DIM}{`);
+        console.log(`    "mcpServers": {`);
+        console.log(mcpBlock);
+        console.log(`    }`);
+        console.log(`  }${RESET}\n`);
+
         process.exit(0);
       } else {
         console.log(`  ${RED}✗ Connection failed: ${result.error}${RESET}\n`);
@@ -128,7 +155,7 @@ async function runServer(): Promise<void> {
         'Set it before starting the server:\n' +
         '  METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server\n' +
         '\n' +
-        'Sign up free: https://app.metrxbot.com/sign-up\n' +
+        'Sign up free: https://app.metrxbot.com/sign-up?source=mcp\n' +
         'Manage keys:  https://app.metrxbot.com/settings/security\n' +
         'Test:         METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test'
     );
