@@ -150,7 +150,7 @@ export class MetrxApiClient {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
+          'X-MCP-Client': 'metrx-mcp-server/0.2.0',
         },
       });
 
@@ -189,7 +189,7 @@ export class MetrxApiClient {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
+          'X-MCP-Client': 'metrx-mcp-server/0.2.0',
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -228,7 +228,7 @@ export class MetrxApiClient {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
+          'X-MCP-Client': 'metrx-mcp-server/0.2.0',
         },
         body: body ? JSON.stringify(body) : undefined,
       });
@@ -270,7 +270,7 @@ export class MetrxApiClient {
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
           'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.1.3',
+          'X-MCP-Client': 'metrx-mcp-server/0.2.0',
         },
       });
 

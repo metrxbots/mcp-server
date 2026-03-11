@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _No unreleased changes._
 
+## [0.2.0] - 2026-03-11
+
+### Added
+- `@metrxbot/cost-leak-detector` companion CLI package — free offline tool that scans LLM API logs for wasted spend (7 checks, scored report, no signup required)
+- Detailed per-category rate-limiting table in README
+- `?source=mcp` UTM tracking on all sign-up URLs for attribution
+- Per-client config snippets in `--test` output (Claude Desktop, Cursor, Windsurf)
+- `mk_` API key prefix support in `--test` validation
+- "Companion Tool" and "A Note on Naming" sections in README
+
+### Fixed
+- Corrected Lite tier pricing from $299/month to $19/month in upgrade justification
+- Added missing Pro tier ($49/month) to upgrade justification
+
+### Changed
+- `server.json`: added `title`, `websiteUrl`, expanded description, `remoteEndpoints` → `remotes` per latest MCP schema
+- Smarter postinstall banner that detects existing API key
+
 ## [0.1.3] - 2026-03-09
 
 ### Added
