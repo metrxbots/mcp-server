@@ -92,18 +92,26 @@ function formatUpgradeJustification(summary: DashboardSummary, periodDays: numbe
   lines.push('');
 
   // Tier comparison and upgrade benefits
-  lines.push('### Upgrade Benefits (Lite Tier)');
-  lines.push('The Lite tier includes:');
+  lines.push('### Upgrade Benefits');
+  lines.push('');
+  lines.push('**Lite Tier — $19/month:**');
+  lines.push('- Up to 10 agents, 50k calls/month, 30-day history');
   lines.push('- Advanced optimization recommendations (10x more suggestions)');
   lines.push('- Real-time failure prediction');
   lines.push('- Model routing experiments');
-  lines.push('- Revenue attribution (if enabled)');
   lines.push('- Priority API rate limits (300 req/min vs 30)');
+  lines.push('');
+  lines.push('**Pro Tier — $49/month:**');
+  lines.push('- Unlimited agents, 100k calls/month, 90-day history');
+  lines.push('- Everything in Lite plus revenue attribution');
+  lines.push('- Advanced anomaly detection');
+  lines.push('- Custom dashboards and team collaboration');
   lines.push('');
 
   // Calculate projected ROI
   const monthlyCost = (summary.cost.total_cost_cents / periodDays) * 30;
-  const liteTierPrice = 29900; // $299/month in cents
+  const liteTierPrice = 1900; // $19/month in cents
+  const proTierPrice = 4900; // $49/month in cents
   const upgratedSavings = currentSavingsMontly * 1.5; // Estimate 50% more optimization with Lite
 
   lines.push('### ROI Projection');
