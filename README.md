@@ -176,6 +176,16 @@ Experiment started: 90% GPT-4, 10% Claude 3.5 Sonnet
 Check back in 14 days for statistical significance.
 ```
 
+## Companion Tool: Cost Leak Detector
+
+This repo also includes [`@metrxbot/cost-leak-detector`](./packages/cost-leak-detector) — a free, offline CLI that scans your LLM API logs for wasted spend. No signup, no cloud, no data leaves your machine.
+
+```bash
+npx @metrxbot/cost-leak-detector demo
+```
+
+It runs 7 checks (idle agents, premium model overuse, missing caching, high error rates, context overflow, no budgets, arbitrage opportunities) and gives you a scored report in seconds. See the [full docs](./packages/cost-leak-detector/README.md).
+
 ## Configuration
 
 | Variable | Required | Description |
@@ -208,6 +218,10 @@ See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
 - **npm**: [@metrxbot/mcp-server](https://www.npmjs.com/package/@metrxbot/mcp-server)
 - **Smithery**: [metrxbot/mcp-server](https://smithery.ai/server/metrxbot/mcp-server)
 - **Support**: support@metrxbot.com
+
+## A Note on Naming
+
+The product is **Metrx** (metrxbot.com). The npm scope is `@metrxbot` and the Smithery listing is `metrxbot/mcp-server`. The GitHub organization is `metrxbots` (with an **s**) because `metrxbot` was already taken on GitHub. If you see `metrxbot` vs `metrxbots` across platforms, they're the same project — just a GitHub namespace constraint.
 
 ## License
 

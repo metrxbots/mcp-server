@@ -10,3 +10,4 @@ coverage/
 # MCP Registry publisher
 mcp-publisher
 .mcpregistry_*
+community-responses.md
