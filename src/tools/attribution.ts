@@ -166,7 +166,8 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       }
 
       const data = result.data!;
-      const totalCostDollars = (data.costs.total_microcents / 1_000_000).toFixed(2);
+      // 1 dollar = 100_000_000 microcents (see budgets.ts / formatMicrocents)
+      const totalCostDollars = (data.costs.total_microcents / 100_000_000).toFixed(2);
       const totalOutcomeDollars = (data.outcomes.total_value_cents / 100).toFixed(2);
       const avgCostDollars = (data.costs.avg_per_request / 100).toFixed(4);
 
@@ -182,7 +183,7 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       if (modelEntries.length > 0) {
         lines.push('- By model:');
         for (const [model, microcents] of modelEntries) {
-          lines.push(`  - ${model}: $${(microcents / 1_000_000).toFixed(2)}`);
+          lines.push(`  - ${model}: $${((microcents as number) / 100_000_000).toFixed(2)}`);
         }
       }
 

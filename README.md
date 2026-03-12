@@ -70,64 +70,68 @@ npm install @metrxbot/mcp-server
 
 ## 23 Tools Across 10 Domains
 
-### Dashboard (2 tools)
+### Dashboard (3 tools)
 | Tool | Description |
 |------|-------------|
-| `metrx_get_cost_summary` | Total spend, call counts, error rates, agent breakdown, and optimization opportunities |
-| `metrx_list_agents` | All agents with status, category, cost metrics, and health indicators |
+| `metrx_get_cost_summary` | Comprehensive cost summary — total spend, call counts, error rates, and optimization opportunities |
+| `metrx_list_agents` | List all agents with status, category, cost metrics, and health indicators |
+| `metrx_get_agent_detail` | Detailed agent info including model, framework, cost breakdown, and performance history |
 
 ### Optimization (4 tools)
 | Tool | Description |
 |------|-------------|
-| `metrx_get_provider_arbitrage` | Compare costs across providers — find cheaper alternatives |
-| `metrx_get_revenue_intelligence` | Revenue per agent with confidence scores and ROI metrics |
-| `metrx_get_token_guardrails` | Token limit recommendations and overflow detection |
-| `metrx_get_model_recommendations` | Model switching recommendations based on cost, latency, quality |
+| `metrx_get_optimization_recommendations` | AI-powered cost optimization recommendations per agent or fleet-wide |
+| `metrx_apply_optimization` | One-click apply an optimization recommendation to an agent |
+| `metrx_route_model` | Model routing recommendation for a specific task based on complexity |
+| `metrx_compare_models` | Compare LLM model pricing and capabilities across providers |
 
-### Budgets (4 tools)
+### Budgets (3 tools)
 | Tool | Description |
 |------|-------------|
-| `metrx_create_budget` | Create monthly/daily budgets with hard, soft, or monitor enforcement |
-| `metrx_update_budget` | Update limits, frequency, or enforcement mode |
-| `metrx_list_budgets` | All budgets with current spend vs. limits |
-| `metrx_delete_budget` | Remove a budget (historical data preserved) |
+| `metrx_get_budget_status` | Current status of all budget configurations with spend vs. limits |
+| `metrx_set_budget` | Create or update a budget with hard, soft, or monitor enforcement |
+| `metrx_update_budget_mode` | Change enforcement mode of an existing budget or pause/resume it |
 
 ### Alerts (3 tools)
 | Tool | Description |
 |------|-------------|
-| `metrx_create_alert_policy` | Alert on cost overages, error rates, latency spikes, anomalies |
-| `metrx_update_alert_policy` | Update thresholds, channels, enable/disable |
-| `metrx_list_alerts` | Active alerts and current status per agent |
+| `metrx_get_alerts` | Active alerts and notifications for your agent fleet |
+| `metrx_acknowledge_alert` | Mark one or more alerts as read/acknowledged |
+| `metrx_get_failure_predictions` | Predictive failure analysis — identify agents likely to fail before it happens |
 
-### Experiments (2 tools)
+### Experiments (3 tools)
 | Tool | Description |
 |------|-------------|
-| `metrx_start_experiment` | A/B test comparing two LLM models with traffic splitting |
+| `metrx_create_model_experiment` | Start an A/B test comparing two LLM models with traffic splitting |
 | `metrx_get_experiment_results` | Statistical significance, cost delta, and recommended action |
+| `metrx_stop_experiment` | Stop a running model routing experiment and lock in the winner |
 
-### Cost Leak Detector (2 tools)
+### Cost Leak Detector (1 tool)
 | Tool | Description |
 |------|-------------|
-| `metrx_scan_cost_leaks` | Find cost anomalies and waste across your fleet |
-| `metrx_analyze_cost_leak` | Deep-dive into a specific anomaly with timeline and root cause |
+| `metrx_run_cost_leak_scan` | Comprehensive 7-check cost leak audit across your entire agent fleet |
 
-### Attribution (2 tools)
+### Attribution (3 tools)
 | Tool | Description |
 |------|-------------|
 | `metrx_attribute_task` | Link agent actions to business outcomes for ROI tracking |
-| `metrx_get_attribution_report` | Multi-source attribution report with confidence scores |
+| `metrx_get_task_roi` | Calculate return on investment for an agent — costs vs. attributed outcomes |
+| `metrx_get_attribution_report` | Multi-source attribution report with confidence scores and top contributors |
 
-### ROI & Reporting (2 tools)
+### Alert Configuration (1 tool)
 | Tool | Description |
 |------|-------------|
-| `metrx_get_upgrade_justification` | ROI report for tier upgrades based on usage patterns |
-| `metrx_generate_roi_audit` | Board-ready ROI audit report |
+| `metrx_configure_alert_threshold` | Set cost or operational alert thresholds with email, webhook, or auto-pause |
 
-### Alert Configuration (2 tools)
+### ROI Audit (1 tool)
 | Tool | Description |
 |------|-------------|
-| `metrx_configure_alert_threshold` | Set cost/operational thresholds with email, webhook, or auto-pause |
-| `metrx_get_failure_predictions` | Predictive analysis — identify agents likely to fail before it happens |
+| `metrx_generate_roi_audit` | Board-ready ROI audit report for your AI agent fleet |
+
+### Upgrade Justification (1 tool)
+| Tool | Description |
+|------|-------------|
+| `metrx_get_upgrade_justification` | ROI report for tier upgrades based on current usage patterns |
 
 ## Prompts
 
@@ -158,21 +162,22 @@ Total Spend: $234.56 | Calls: 2,450 | Error Rate: 0.2%
 
 ```
 User: Am I overpaying for my agents?
-→ metrx_get_provider_arbitrage(agent_id="agent_123")
+→ metrx_compare_models(models=["gpt-4o", "claude-3-5-sonnet", "gemini-1.5-pro"])
 
-Current: GPT-4 @ $15.20/1K calls
-Alternative: Gemini 1.5 @ $6.80/1K calls (-55%)
-Estimated Savings: $420/month
+Model Comparison (per 1M tokens):
+├── gpt-4o: $2.50 in / $10.00 out
+├── claude-3-5-sonnet: $3.00 in / $15.00 out
+└── gemini-1.5-pro: $3.50 in / $10.50 out
 ```
 
 ### "Test a cheaper model"
 
 ```
 User: Test Claude 3.5 Sonnet against my GPT-4 setup
-→ metrx_start_experiment(name="Claude Trial", agent_id="agent_123",
-    model_a="gpt-4", model_b="claude-3-5-sonnet", traffic_split=10)
+→ metrx_create_model_experiment(agent_id="agent_123",
+    model_a="gpt-4o", model_b="claude-3-5-sonnet-20241022", traffic_split=10)
 
-Experiment started: 90% GPT-4, 10% Claude 3.5 Sonnet
+Experiment started: 90% GPT-4o, 10% Claude 3.5 Sonnet
 Check back in 14 days for statistical significance.
 ```
 

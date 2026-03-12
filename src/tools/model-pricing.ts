@@ -118,6 +118,17 @@ export const MODEL_PRICING: Record<string, ModelPricingEntry> = {
     supports_caching: true,
   },
 
+  'claude-sonnet-4-20250514': {
+    model: 'claude-sonnet-4-20250514',
+    provider: 'anthropic',
+    tier: 'balanced',
+    input_cost_per_1m: 3.0,
+    output_cost_per_1m: 15.0,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+
   // ── Google ───────────────────────────────────────────────────────────────────
   'gemini-1.5-pro': {
     model: 'gemini-1.5-pro',
@@ -245,7 +256,7 @@ const MODEL_ALIASES: Record<string, string> = {
   'claude-3-5-sonnet': 'claude-3-5-sonnet-20241022',
   'claude-3-5-haiku': 'claude-3-5-haiku-20241022',
   'claude-3-haiku': 'claude-3-haiku-20240307',
-  'claude-sonnet-4': 'claude-3-5-sonnet-20241022',
+  'claude-sonnet-4': 'claude-sonnet-4-20250514',
   // Google aliases
   'gemini-pro': 'gemini-1.5-pro',
   'gemini-flash': 'gemini-1.5-flash',
