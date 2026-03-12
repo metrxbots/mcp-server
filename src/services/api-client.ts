@@ -265,7 +265,7 @@ export class MetrxApiClient {
     const url = new URL('/api/v1/agents', this.baseUrl);
 
     try {
-      const response = await fetch(url.toString(), {
+      const response = await this.fetchWithRetry(url.toString(), {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${this.apiKey}`,
