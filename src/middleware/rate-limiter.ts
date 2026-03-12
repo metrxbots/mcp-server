@@ -29,6 +29,7 @@ export const DEFAULT_RATE_LIMITS: Record<string, RateLimitConfig> = {
   experiments: { maxRequests: 10, windowMs: 60000 }, // 10/min
   budgets: { maxRequests: 10, windowMs: 60000 }, // 10/min
   alerts: { maxRequests: 10, windowMs: 60000 }, // 10/min
+  attribution: { maxRequests: 10, windowMs: 60000 }, // 10/min
 
   // Expensive operations
   optimization: { maxRequests: 5, windowMs: 60000 }, // 5/min
@@ -36,6 +37,54 @@ export const DEFAULT_RATE_LIMITS: Record<string, RateLimitConfig> = {
 
   // Default fallback
   default: { maxRequests: 30, windowMs: 60000 }, // 30/min
+};
+
+/**
+ * Explicit tool → category mapping.
+ * Ensures every registered tool resolves to its intended rate limit category
+ * instead of relying on fragile string-parsing heuristics.
+ */
+export const TOOL_CATEGORIES: Record<string, string> = {
+  // Dashboard (60/min)
+  get_cost_summary: 'dashboard',
+
+  // Agents (60/min)
+  list_agents: 'agents',
+  get_agent_detail: 'agents',
+
+  // Alerts (10/min)
+  get_alerts: 'alerts',
+  acknowledge_alert: 'alerts',
+  configure_alert_threshold: 'alerts',
+  get_failure_predictions: 'alerts',
+
+  // Budgets (10/min)
+  get_budget_status: 'budgets',
+  set_budget: 'budgets',
+  update_budget_mode: 'budgets',
+
+  // Experiments (10/min)
+  create_model_experiment: 'experiments',
+  get_experiment_results: 'experiments',
+  stop_experiment: 'experiments',
+
+  // Optimization (5/min)
+  get_optimization_recommendations: 'optimization',
+  apply_optimization: 'optimization',
+  route_model: 'optimization',
+  compare_models: 'optimization',
+
+  // Cost Leak Scan (2/5min)
+  run_cost_leak_scan: 'cost-leak-scan',
+
+  // Attribution (10/min)
+  attribute_task: 'attribution',
+  get_task_roi: 'attribution',
+  get_attribution_report: 'attribution',
+
+  // Default (30/min) — general-purpose tools
+  generate_roi_audit: 'default',
+  get_upgrade_justification: 'default',
 };
 
 export class RateLimiter {
@@ -126,7 +175,12 @@ export class RateLimiter {
   }
 
   private getToolCategory(toolName: string): string {
-    // Extract category from tool name (e.g., "get_dashboard_summary" -> "dashboard")
+    // 1. Explicit mapping — guaranteed correct for all registered tools
+    if (toolName in TOOL_CATEGORIES) {
+      return TOOL_CATEGORIES[toolName];
+    }
+
+    // 2. Fallback: heuristic string-parsing for unregistered/future tools
     const parts = toolName.replace(/^(get_|set_|list_|create_|update_|delete_)/, '').split('_');
     const category = parts[0];
 
