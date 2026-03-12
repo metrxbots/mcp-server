@@ -12,6 +12,10 @@
 
 The official [MCP server](https://modelcontextprotocol.io) for [Metrx](https://metrxbot.com) — the AI Agent Cost Intelligence Platform. Give any MCP-compatible agent (Claude, GPT, Gemini, Cursor, Windsurf) the ability to track its own costs, detect waste, optimize model selection, and prove ROI.
 
+<a href="https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server">
+  <img width="380" height="200" src="https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server/badge" alt="Metrx Server MCP server" />
+</a>
+
 ## Why Metrx?
 
 | Problem | What Metrx Does |
