@@ -302,9 +302,11 @@ describe('MetrxApiClient', () => {
     });
 
     it('should handle network errors in PATCH', async () => {
+      // Use maxRetries=0 to avoid retry delays in test
+      const noRetryClient = new MetrxApiClient('sk_test_key', undefined, 0);
       (global.fetch as any).mockRejectedValueOnce(new Error('Timeout'));
 
-      const result = await client.patch('/alerts', {});
+      const result = await noRetryClient.patch('/alerts', {});
       expect(result.error).toContain('Network error');
     });
   });
