@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _No unreleased changes._
 
+## [0.2.2] - 2026-03-11
+
+### Added
+- `--demo` mode for trying the MCP server without an API key
+- `--auth` CLI login flow to reduce signup friction
+- DRY'd API client headers into shared getter using constants
+
+### Fixed
+- `ping()` now uses `fetchWithRetry` for transient 5xx errors
+- cost-leak-detector CI: root `.gitignore` was excluding `packages/*/dist/`, preventing dist from being checked out in CI
+
+### Changed
+- Eliminated duplicated tool registration in `index.ts`
+
 ## [0.2.1] - 2026-03-11
 
 ### Fixed

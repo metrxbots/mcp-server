@@ -6,12 +6,12 @@
     "url": "https://github.com/metrxbots/mcp-server",
     "source": "github"
   },
-  "version": "0.2.1",
+  "version": "0.2.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@metrxbot/mcp-server",
-      "version": "0.2.1",
+      "version": "0.2.2",
       "transport": {
         "type": "stdio"
       },

@@ -1,6 +1,6 @@
 {
   "name": "@metrxbot/mcp-server",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Metrx MCP Server — AI agent cost intelligence tools for LLM agents. Track spend, optimize models, manage budgets, detect waste, and prove ROI.",
   "type": "module",
   "main": "dist/index.js",
