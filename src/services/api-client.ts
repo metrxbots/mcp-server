@@ -8,7 +8,7 @@
  * or configured at runtime.
  */
 
-import { DEFAULT_API_URL } from '../constants.js';
+import { DEFAULT_API_URL, SERVER_NAME, SERVER_VERSION } from '../constants.js';
 import type { ApiResponse } from '../types.js';
 
 // API Docs URL for error messages
@@ -34,6 +34,17 @@ export class MetrxApiClient {
         `  Then test:    METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test`
       );
     }
+  }
+
+  /**
+   * Common request headers for all API calls.
+   */
+  private get headers(): Record<string, string> {
+    return {
+      Authorization: `Bearer ${this.apiKey}`,
+      'Content-Type': 'application/json',
+      'X-MCP-Client': `${SERVER_NAME}/${SERVER_VERSION}`,
+    };
   }
 
   /**
@@ -147,11 +158,7 @@ export class MetrxApiClient {
     try {
       const response = await this.fetchWithRetry(url.toString(), {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.2.1',
-        },
+        headers: this.headers,
       });
 
       if (!response.ok) {
@@ -186,11 +193,7 @@ export class MetrxApiClient {
     try {
       const response = await this.fetchWithRetry(url.toString(), {
         method: 'POST',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.2.1',
-        },
+        headers: this.headers,
         body: body ? JSON.stringify(body) : undefined,
       });
 
@@ -225,11 +228,7 @@ export class MetrxApiClient {
     try {
       const response = await this.fetchWithRetry(url.toString(), {
         method: 'PATCH',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.2.1',
-        },
+        headers: this.headers,
         body: body ? JSON.stringify(body) : undefined,
       });
 
@@ -258,7 +257,7 @@ export class MetrxApiClient {
   /**
    * Lightweight ping to verify API key is valid.
    * Used by the `--test` CLI flag.
-   * Attempts a HEAD request first, falls back to GET on the base URL.
+   * Attempts a GET request on the agents endpoint.
    * Returns { ok: true } on success, or { ok: false, error: string } on failure.
    */
   async ping(): Promise<{ ok: boolean; error?: string }> {
@@ -267,11 +266,7 @@ export class MetrxApiClient {
     try {
       const response = await this.fetchWithRetry(url.toString(), {
         method: 'GET',
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-          'Content-Type': 'application/json',
-          'X-MCP-Client': 'metrx-mcp-server/0.2.1',
-        },
+        headers: this.headers,
       });
 
       if (response.ok) {
