@@ -29,25 +29,12 @@
  *   }
  */
 
-import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { z } from 'zod';
-import { SERVER_NAME, SERVER_VERSION } from './constants.js';
+import { SERVER_VERSION } from './constants.js';
 import { MetrxApiClient } from './services/api-client.js';
 import { DemoApiClient } from './services/demo-client.js';
 import { createMcpServer } from './server-factory.js';
 import { loadApiKey, runAuthFlow } from './services/auth.js';
-import { registerDashboardTools } from './tools/dashboard.js';
-import { registerOptimizationTools } from './tools/optimization.js';
-import { registerBudgetTools } from './tools/budgets.js';
-import { registerAlertTools } from './tools/alerts.js';
-import { registerExperimentTools } from './tools/experiments.js';
-import { registerCostLeakDetectorTools } from './tools/cost-leak-detector.js';
-import { registerAttributionTools } from './tools/attribution.js';
-import { registerUpgradeJustificationTools } from './tools/upgrade-justification.js';
-import { registerAlertConfigTools } from './tools/alert-config.js';
-import { registerROIAuditTools } from './tools/roi-audit.js';
-import { RateLimiter } from './middleware/rate-limiter.js';
 
 // ── --demo flag: run with mock data, no API key required ──
 // Lets users try all 23 tools instantly without signing up.
@@ -131,11 +118,8 @@ if (process.argv.includes('--demo')) {
   });
 }
 
-const rateLimiter = new RateLimiter();
-
 async function runServer(): Promise<void> {
-  // Initialize the API client
-  // Priority: METRX_API_KEY env var > ~/.metrxrc > error
+  // Resolve API key: METRX_API_KEY env var > ~/.metrxrc > error
   const resolvedKey = loadApiKey();
 
   let apiClient: MetrxApiClient;
@@ -160,154 +144,12 @@ async function runServer(): Promise<void> {
     process.exit(1);
   }
 
-  // Create MCP server
-  const server = new McpServer({
-    name: SERVER_NAME,
-    version: SERVER_VERSION,
-  });
+  // Single code path: createMcpServer handles tools, prompts, rate limiting, namespace prefix
+  const server = createMcpServer(apiClient);
 
-  // ── Rate limiting middleware + metrx_ namespace prefix ──
-  // All tools are registered exclusively as metrx_{name}.
-  // The metrx_ prefix namespaces our tools to avoid collisions when
-  // multiple MCP servers are used together.
-  const METRX_PREFIX = 'metrx_';
-  const originalRegisterTool = server.registerTool.bind(server);
-  (server as any).registerTool = function (
-    name: string,
-    config: any,
-    handler: (...handlerArgs: any[]) => Promise<any>
-  ) {
-    const wrappedHandler = async (...handlerArgs: any[]) => {
-      if (!rateLimiter.isAllowed(name)) {
-        return {
-          content: [
-            {
-              type: 'text' as const,
-              text: `Rate limit exceeded for tool '${name}'. Maximum 60 requests per minute allowed.`,
-            },
-          ],
-          isError: true,
-        };
-      }
-      return handler(...handlerArgs);
-    };
-
-    // Register with metrx_ prefix (only — no deprecated aliases)
-    const prefixedName = name.startsWith(METRX_PREFIX) ? name : `${METRX_PREFIX}${name}`;
-    originalRegisterTool(prefixedName, config, wrappedHandler);
-  };
-
-  // ── Register all tool domains ──
-  registerDashboardTools(server, apiClient);
-  registerOptimizationTools(server, apiClient);
-  registerBudgetTools(server, apiClient);
-  registerAlertTools(server, apiClient);
-  registerExperimentTools(server, apiClient);
-  registerCostLeakDetectorTools(server, apiClient);
-  registerAttributionTools(server, apiClient);
-  registerUpgradeJustificationTools(server, apiClient);
-  registerAlertConfigTools(server, apiClient);
-  registerROIAuditTools(server, apiClient);
-
-  // ── MCP Prompts ──
-  // Pre-built prompt templates that help users interact with Metrx tools.
-
-  server.registerPrompt(
-    'analyze-costs',
-    {
-      title: 'Analyze AI Agent Costs',
-      description:
-        'Get a comprehensive overview of your AI agent costs including spend breakdown, ' +
-        'top-spending agents, error rates, and optimization opportunities.',
-      argsSchema: {
-        period_days: z
-          .string()
-          .optional()
-          .describe('Number of days to analyze (default: 30). Examples: "7", "30", "90"'),
-      },
-    },
-    async ({ period_days }) => {
-      const days = period_days ? parseInt(period_days, 10) : 30;
-      return {
-        messages: [
-          {
-            role: 'user' as const,
-            content: {
-              type: 'text' as const,
-              text:
-                `Analyze my AI agent costs for the last ${days} days. ` +
-                'Start by calling metrx_get_cost_summary, then metrx_list_agents to see all agents, ' +
-                'and metrx_get_optimization_recommendations for savings. ' +
-                'Summarize: total spend, top 3 spending agents, error rates, and top optimization opportunities.',
-            },
-          },
-        ],
-      };
-    }
-  );
-
-  server.registerPrompt(
-    'find-savings',
-    {
-      title: 'Find Cost Savings',
-      description:
-        'Discover optimization opportunities across your AI agent fleet. ' +
-        'Identifies model downgrades, caching opportunities, and routing improvements.',
-    },
-    async () => ({
-      messages: [
-        {
-          role: 'user' as const,
-          content: {
-            type: 'text' as const,
-            text:
-              'Find cost savings across my AI agents. ' +
-              'Call metrx_get_optimization_recommendations to find opportunities, ' +
-              'then metrx_run_cost_leak_scan to detect waste patterns. ' +
-              'For each finding, explain the potential savings in dollars and how to fix it.',
-          },
-        },
-      ],
-    })
-  );
-
-  server.registerPrompt(
-    'cost-leak-scan',
-    {
-      title: 'Run Cost Leak Scan',
-      description:
-        'Scan for waste patterns in your AI agent operations — retry storms, ' +
-        'oversized contexts, model mismatch, and missing caching.',
-      argsSchema: {
-        agent_id: z
-          .string()
-          .optional()
-          .describe('Optional agent ID (UUID) to scan a specific agent. Omit to scan all.'),
-      },
-    },
-    async ({ agent_id }) => ({
-      messages: [
-        {
-          role: 'user' as const,
-          content: {
-            type: 'text' as const,
-            text: agent_id
-              ? `Run a cost leak scan for agent ${agent_id} using metrx_run_cost_leak_scan. ` +
-                'Show the MetrxScore, list all detected leaks with severity, and suggest fixes for each.'
-              : 'Run a cost leak scan across all agents using metrx_run_cost_leak_scan. ' +
-                'Show the MetrxScore, list all detected leaks ranked by severity, ' +
-                'and provide a prioritized action plan to fix the top waste patterns.',
-          },
-        },
-      ],
-    })
-  );
-
-  // ── Connect via stdio transport ──
   const transport = new StdioServerTransport();
   await server.connect(transport);
 
-  // Graceful shutdown
   process.on('SIGINT', async () => {
     await server.close();
     process.exit(0);
