@@ -8,6 +8,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _No unreleased changes._
 
+## [0.2.1] - 2026-03-11
+
+### Fixed
+- `api-client.ts`: PATCH method now uses `fetchWithRetry` instead of raw `fetch` (budget updates and alert acks had zero retry on failure)
+- `attribution.ts`: Microcent division fixed from `/1_000_000` to `/100_000_000` (costs were displaying 100× too high)
+- `model-pricing.ts`: Added `claude-sonnet-4-20250514` pricing entry + fixed alias pointing to wrong model
+- `upgrade-justification.ts`: Fixed tier name ("Free" → "Starter"), typo (`upgratedSavings`), broken breakeven math, unused variable
+- `smithery.yaml`: Version aligned to `0.2.1`
+- `server.json`: Description aligned with smithery
+- `README.md`: Replaced fabricated tool names with actual 23 registered tools, corrected per-domain counts, fixed examples
+
 ## [0.2.0] - 2026-03-11
 
 ### Added

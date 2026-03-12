@@ -181,7 +181,7 @@ describe('MetrxApiClient', () => {
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
-            'X-MCP-Client': 'metrx-mcp-server/0.2.0',
+            'X-MCP-Client': 'metrx-mcp-server/0.2.1',
           }),
         })
       );
