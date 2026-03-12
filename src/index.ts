@@ -34,6 +34,9 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { SERVER_NAME, SERVER_VERSION } from './constants.js';
 import { MetrxApiClient } from './services/api-client.js';
+import { DemoApiClient } from './services/demo-client.js';
+import { createMcpServer } from './server-factory.js';
+import { loadApiKey, runAuthFlow } from './services/auth.js';
 import { registerDashboardTools } from './tools/dashboard.js';
 import { registerOptimizationTools } from './tools/optimization.js';
 import { registerBudgetTools } from './tools/budgets.js';
@@ -46,9 +49,23 @@ import { registerAlertConfigTools } from './tools/alert-config.js';
 import { registerROIAuditTools } from './tools/roi-audit.js';
 import { RateLimiter } from './middleware/rate-limiter.js';
 
+// ── --demo flag: run with mock data, no API key required ──
+// Lets users try all 23 tools instantly without signing up.
+if (process.argv.includes('--demo')) {
+  runDemoServer().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+} else if (process.argv.includes('--auth')) {
+// ── --auth flag: interactive CLI login flow ──
+// Opens browser, prompts for API key, validates, saves to ~/.metrxrc.
+  runAuthFlow().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+} else if (process.argv.includes('--test')) {
 // ── --test flag: verify API key before stdio transport takes over ──
 // Must run before anything touches stdin/stdout.
-if (process.argv.includes('--test')) {
   (async () => {
     const RESET = '\x1b[0m';
     const BOLD = '\x1b[1m';
@@ -60,13 +77,13 @@ if (process.argv.includes('--test')) {
     console.log(`\n${CYAN}${BOLD}Metrx MCP Server — Connection Test${RESET}\n`);
     console.log(`  Version: ${SERVER_VERSION}`);
 
-    // Check API key is present
-    const apiKey = process.env.METRX_API_KEY;
+    // Check API key — env var or ~/.metrxrc
+    const apiKey = loadApiKey();
     if (!apiKey) {
-      console.log(`\n  ${RED}✗ METRX_API_KEY not set${RESET}`);
+      console.log(`\n  ${RED}✗ No API key found${RESET}`);
+      console.log(`\n  ${DIM}Run ${BOLD}npx @metrxbot/mcp-server --auth${RESET}${DIM} to log in, or set METRX_API_KEY.${RESET}`);
       console.log(`\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up${RESET}`);
-      console.log(`  Manage keys:   ${CYAN}https://app.metrxbot.com/settings/security${RESET}`);
-      console.log(`\n  ${DIM}Usage: METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test${RESET}\n`);
+      console.log(`  Manage keys:   ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
       process.exit(1);
     }
 
@@ -118,19 +135,27 @@ const rateLimiter = new RateLimiter();
 
 async function runServer(): Promise<void> {
   // Initialize the API client
-  // Throws if METRX_API_KEY is not set
+  // Priority: METRX_API_KEY env var > ~/.metrxrc > error
+  const resolvedKey = loadApiKey();
+
   let apiClient: MetrxApiClient;
   try {
-    apiClient = new MetrxApiClient();
+    apiClient = new MetrxApiClient(resolvedKey || undefined);
   } catch (err) {
     console.error(
-      'Error: METRX_API_KEY environment variable is required.\n' +
-        'Set it before starting the server:\n' +
+      'Error: No API key found.\n' +
+        '\n' +
+        'Option 1 — Interactive login (saves key for future use):\n' +
+        '  npx @metrxbot/mcp-server --auth\n' +
+        '\n' +
+        'Option 2 — Environment variable:\n' +
         '  METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server\n' +
         '\n' +
+        'Option 3 — Try demo mode (no signup):\n' +
+        '  npx @metrxbot/mcp-server --demo\n' +
+        '\n' +
         'Sign up free: https://app.metrxbot.com/sign-up\n' +
-        'Manage keys:  https://app.metrxbot.com/settings/security\n' +
-        'Test:         METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test'
+        'Manage keys:  https://app.metrxbot.com/settings/security'
     );
     process.exit(1);
   }
@@ -294,5 +319,27 @@ async function runServer(): Promise<void> {
   });
 }
 
-// Note: runServer() is called conditionally above (only when --test is NOT passed).
-// If --test is passed, the IIFE handles it and exits before reaching here.
+/**
+ * Start the MCP server in demo mode with mock data.
+ * No API key required — uses DemoApiClient with embedded fixtures.
+ */
+async function runDemoServer(): Promise<void> {
+  const demoClient = new DemoApiClient();
+  const server = createMcpServer(demoClient);
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  process.on('SIGINT', async () => {
+    await server.close();
+    process.exit(0);
+  });
+
+  process.on('SIGTERM', async () => {
+    await server.close();
+    process.exit(0);
+  });
+}
+
+// Note: runServer()/runDemoServer() is called conditionally above.
+// --demo → runDemoServer(), --test → IIFE that exits, otherwise → runServer().
