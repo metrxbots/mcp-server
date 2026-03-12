@@ -1,0 +1,70 @@
+{
+  "name": "@metrxbot/cost-leak-detector",
+  "version": "0.1.0",
+  "description": "Find wasted AI spend in 60 seconds — local, offline, no sign-up required. 7 cost leak checks for LLM APIs.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "metrx-leak-detect": "./dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/cli.ts",
+    "test": "vitest run",
+    "test:coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "commander": "^12.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.5.0",
+    "vitest": "^1.6.0"
+  },
+  "keywords": [
+    "metrx",
+    "llm",
+    "cost",
+    "leak",
+    "detector",
+    "opentelemetry",
+    "otel",
+    "optimization",
+    "ai-cost",
+    "budget",
+    "waste-detection",
+    "openai",
+    "anthropic",
+    "claude",
+    "gpt",
+    "monitoring",
+    "cost-analysis"
+  ],
+  "author": "Metrx <hello@metrxbot.com>",
+  "license": "MIT",
+  "homepage": "https://github.com/metrxbots/mcp-server/tree/main/packages/cost-leak-detector",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/metrxbots/mcp-server.git",
+    "directory": "packages/cost-leak-detector"
+  },
+  "bugs": {
+    "url": "https://github.com/metrxbots/mcp-server/issues"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

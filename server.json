@@ -1,23 +1,23 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.metrxbots/mcp-server",
-  "description": "Track AI agent costs, detect waste, optimize models, and prove ROI. 23 MCP tools.",
+  "description": "Track AI agent costs, detect waste, optimize models, and prove ROI. 23 MCP tools across 10 domains.",
   "repository": {
     "url": "https://github.com/metrxbots/mcp-server",
     "source": "github"
   },
-  "version": "0.1.2",
+  "version": "0.2.2",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@metrxbot/mcp-server",
-      "version": "0.1.2",
+      "version": "0.2.2",
       "transport": {
         "type": "stdio"
       },
       "environmentVariables": [
         {
-          "description": "Your Metrx API key (get one free at https://app.metrxbot.com/settings/api-keys)",
+          "description": "Your Metrx API key (sign up free at https://app.metrxbot.com/sign-up — manage keys at https://app.metrxbot.com/settings/security)",
           "isRequired": true,
           "format": "string",
           "isSecret": true,
@@ -34,7 +34,7 @@
       },
       "authentication": {
         "type": "bearer",
-        "description": "Metrx API key (get one free at metrxbot.com/settings/security)"
+        "description": "Metrx API key (get one free at https://app.metrxbot.com/settings/security)"
       }
     }
   ]

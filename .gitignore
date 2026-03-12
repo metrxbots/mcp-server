@@ -1,5 +1,6 @@
 node_modules/
 dist/
+!packages/*/dist/
 *.tsbuildinfo
 .npmrc
 .env
@@ -10,3 +11,4 @@ coverage/
 # MCP Registry publisher
 mcp-publisher
 .mcpregistry_*
+community-responses.md

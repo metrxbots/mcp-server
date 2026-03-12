@@ -2,7 +2,7 @@
  * Upgrade Justification Tools
  *
  * Tools for generating ROI reports explaining why tier upgrades
- * from Free to Lite/Pro make sense based on current usage patterns.
+ * from Starter to Lite/Pro make sense based on current usage patterns.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -18,10 +18,10 @@ export function registerUpgradeJustificationTools(server: McpServer, client: Met
     {
       title: 'Get Upgrade Justification',
       description:
-        'Generate an ROI report explaining why an upgrade from Free to Lite/Pro tier makes sense. ' +
+        'Generate an ROI report explaining why an upgrade from Starter to Lite/Pro tier makes sense. ' +
         'Analyzes current usage patterns, calculates optimization potential at higher tiers, ' +
         'and provides a structured upgrade recommendation with projected monthly savings. ' +
-        'Do NOT use if already on Lite or Pro tier — not relevant for paid users.',
+        'Do NOT use if already on Lite or Pro tier — not relevant for paid-tier users.',
       inputSchema: {
         period_days: z
           .number()
@@ -71,7 +71,7 @@ function formatUpgradeJustification(summary: DashboardSummary, periodDays: numbe
   // Current tier (assumed Free if no optimization data)
   lines.push('### Current Status');
   lines.push(`**Analysis Period**: Last ${periodDays} days`);
-  lines.push(`**Current Tier**: Free`);
+  lines.push(`**Current Tier**: Starter (Free)`);
   lines.push(`**Active Agents**: ${summary.agents.active} / ${summary.agents.total}`);
   lines.push(`**Total LLM Calls**: ${summary.cost.total_calls.toLocaleString()}`);
   lines.push(`**Current Monthly Cost**: ${formatCents(summary.cost.total_cost_cents)}`);
@@ -92,31 +92,42 @@ function formatUpgradeJustification(summary: DashboardSummary, periodDays: numbe
   lines.push('');
 
   // Tier comparison and upgrade benefits
-  lines.push('### Upgrade Benefits (Lite Tier)');
-  lines.push('The Lite tier includes:');
+  lines.push('### Upgrade Benefits');
+  lines.push('');
+  lines.push('**Lite Tier — $19/month:**');
+  lines.push('- Up to 10 agents, 50k calls/month, 30-day history');
   lines.push('- Advanced optimization recommendations (10x more suggestions)');
   lines.push('- Real-time failure prediction');
   lines.push('- Model routing experiments');
-  lines.push('- Revenue attribution (if enabled)');
   lines.push('- Priority API rate limits (300 req/min vs 30)');
+  lines.push('');
+  lines.push('**Pro Tier — $49/month:**');
+  lines.push('- Unlimited agents, 100k calls/month, 90-day history');
+  lines.push('- Everything in Lite plus revenue attribution');
+  lines.push('- Advanced anomaly detection');
+  lines.push('- Custom dashboards and team collaboration');
   lines.push('');
 
   // Calculate projected ROI
   const monthlyCost = (summary.cost.total_cost_cents / periodDays) * 30;
-  const liteTierPrice = 29900; // $299/month in cents
-  const upgratedSavings = currentSavingsMontly * 1.5; // Estimate 50% more optimization with Lite
+  const liteTierPrice = 1900; // $19/month in cents
+  const _proTierPrice = 4900; // $49/month in cents
+  const upgradedSavings = currentSavingsMontly * 1.5; // Estimate 50% more optimization with Lite
 
   lines.push('### ROI Projection');
   lines.push(`**Projected Monthly LLM Cost**: ${formatCents(monthlyCost)}`);
   lines.push(`**Lite Tier Subscription**: ${formatCents(liteTierPrice)}`);
-  lines.push(`**Additional Savings with Lite**: ${formatCents(upgratedSavings)}`);
+  lines.push(`**Additional Savings with Lite**: ${formatCents(upgradedSavings)}`);
   lines.push('');
 
-  const netBenefit = upgratedSavings - (liteTierPrice - (currentSavingsMontly / 100) * 100000); // simplified calculation
+  // Net benefit = additional savings from upgrade minus subscription cost
+  const netBenefit = upgradedSavings - liteTierPrice;
   const breakEven =
     netBenefit > 0
       ? 'Upgrade pays for itself immediately'
-      : `Breakeven in ${Math.ceil((liteTierPrice / upgratedSavings) * 30)} days`;
+      : upgradedSavings > 0
+        ? `Breakeven in ${Math.ceil(liteTierPrice / (upgradedSavings / 30))} days`
+        : 'Upgrade cost exceeds current optimization potential — revisit when volume grows';
 
   lines.push('### Recommendation');
   if (summary.cost.total_calls > 100000) {
