@@ -24,7 +24,48 @@ The official [MCP server](https://modelcontextprotocol.io) for [Metrx](https://m
 
 ## Quick Start
 
-### One-command install (Claude Desktop, Cursor, Windsurf)
+### Try it now — no signup required
+
+```bash
+npx @metrxbot/mcp-server --demo
+```
+
+This starts the server with sample data so you can explore all 23 tools instantly.
+
+### Connect your real data
+
+**Option A — Interactive login (recommended):**
+
+```bash
+npx @metrxbot/mcp-server --auth
+```
+
+Opens your browser to get an API key, validates it, and saves it to `~/.metrxrc` so you never need to set env vars.
+
+**Option B — Environment variable:**
+
+```bash
+METRX_API_KEY=sk_live_your_key_here npx @metrxbot/mcp-server --test
+```
+
+Get your free API key at [app.metrxbot.com/sign-up](https://app.metrxbot.com/sign-up).
+
+### Add to your MCP client (Claude Desktop, Cursor, Windsurf)
+
+If you used `--auth`, no `env` block is needed — the key is read from `~/.metrxrc` automatically:
+
+```json
+{
+  "mcpServers": {
+    "metrx": {
+      "command": "npx",
+      "args": ["@metrxbot/mcp-server"]
+    }
+  }
+}
+```
+
+Or pass the key explicitly via environment:
 
 ```json
 {
@@ -39,18 +80,6 @@ The official [MCP server](https://modelcontextprotocol.io) for [Metrx](https://m
   }
 }
 ```
-
-Get your free API key at [app.metrxbot.com/sign-up](https://app.metrxbot.com/sign-up).
-
-### Verify your setup
-
-After installing, verify your API key works:
-
-```bash
-METRX_API_KEY=sk_live_your_key_here npx @metrxbot/mcp-server --test
-```
-
-You should see `✓ Connection successful!` and a ready-to-paste MCP client config.
 
 ### Remote HTTP endpoint
 
@@ -193,10 +222,29 @@ It runs 7 checks (idle agents, premium model overuse, missing caching, high erro
 
 ## Configuration
 
+### API Key (required)
+
+The server looks for your API key in this order:
+
+1. `METRX_API_KEY` environment variable
+2. `~/.metrxrc` file (created by `--auth`)
+
+Run `npx @metrxbot/mcp-server --auth` to save your key, or set the env var directly.
+
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `METRX_API_KEY` | Yes | Your Metrx API key ([get one free](https://app.metrxbot.com/sign-up)) |
+| `METRX_API_KEY` | Yes* | Your Metrx API key ([get one free](https://app.metrxbot.com/sign-up)) |
 | `METRX_API_URL` | No | Override API base URL (default: `https://metrxbot.com/api/v1`) |
+
+*Not required if you've run `--auth` — the key is read from `~/.metrxrc` automatically.
+
+### CLI Flags
+
+| Flag | Description |
+|------|-------------|
+| `--demo` | Start with sample data — no API key or signup needed |
+| `--auth` | Interactive login — opens browser, validates key, saves to `~/.metrxrc` |
+| `--test` | Verify your API key and connection |
 
 ## Rate Limiting
 

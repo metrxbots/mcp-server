@@ -24,14 +24,35 @@ import { registerROIAuditTools } from './tools/roi-audit.js';
 import { RateLimiter } from './middleware/rate-limiter.js';
 
 /**
+ * Minimal interface that any API client (real or demo) must satisfy.
+ * Uses structural typing — no `implements` keyword needed.
+ */
+export interface ApiClientLike {
+  get<T>(path: string, params?: Record<string, string | number | boolean>): Promise<{ data?: T; error?: string }>;
+  post<T>(path: string, body?: Record<string, unknown>): Promise<{ data?: T; error?: string }>;
+  patch<T>(path: string, body?: Record<string, unknown>): Promise<{ data?: T; error?: string }>;
+}
+
+/**
  * Creates a fully-configured McpServer with all Metrx tools registered.
  *
  * @param apiKey - The Metrx API key for authenticating tool calls
  * @param apiUrl - Optional API base URL override (default: https://metrxbot.com/api/v1)
  * @returns A configured McpServer ready to be connected to a transport
  */
-export function createMcpServer(apiKey: string, apiUrl?: string): McpServer {
-  const apiClient = new MetrxApiClient(apiKey, apiUrl);
+export function createMcpServer(apiKey: string, apiUrl?: string): McpServer;
+/**
+ * Creates a fully-configured McpServer using a pre-built API client.
+ * Used for demo mode where DemoApiClient provides mock data.
+ *
+ * @param client - A pre-built API client (real MetrxApiClient or DemoApiClient)
+ * @returns A configured McpServer ready to be connected to a transport
+ */
+export function createMcpServer(client: ApiClientLike): McpServer;
+export function createMcpServer(apiKeyOrClient: string | ApiClientLike, apiUrl?: string): McpServer {
+  const apiClient = typeof apiKeyOrClient === 'string'
+    ? new MetrxApiClient(apiKeyOrClient, apiUrl)
+    : apiKeyOrClient;
   const rateLimiter = new RateLimiter();
 
   const server = new McpServer({
@@ -68,16 +89,18 @@ export function createMcpServer(apiKey: string, apiUrl?: string): McpServer {
   };
 
   // Register all tool domains
-  registerDashboardTools(server, apiClient);
-  registerOptimizationTools(server, apiClient);
-  registerBudgetTools(server, apiClient);
-  registerAlertTools(server, apiClient);
-  registerExperimentTools(server, apiClient);
-  registerCostLeakDetectorTools(server, apiClient);
-  registerAttributionTools(server, apiClient);
-  registerUpgradeJustificationTools(server, apiClient);
-  registerAlertConfigTools(server, apiClient);
-  registerROIAuditTools(server, apiClient);
+  // Cast to any for duck-typing compatibility with DemoApiClient
+  const client = apiClient as any;
+  registerDashboardTools(server, client);
+  registerOptimizationTools(server, client);
+  registerBudgetTools(server, client);
+  registerAlertTools(server, client);
+  registerExperimentTools(server, client);
+  registerCostLeakDetectorTools(server, client);
+  registerAttributionTools(server, client);
+  registerUpgradeJustificationTools(server, client);
+  registerAlertConfigTools(server, client);
+  registerROIAuditTools(server, client);
 
   // ── MCP Prompts ──
   // Pre-built prompt templates that help users interact with Metrx tools.

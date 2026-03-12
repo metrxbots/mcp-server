@@ -28,7 +28,14 @@ ${CYAN}${BOLD}  ╔════════════════════�
   ║                                                      ║
   ╚══════════════════════════════════════════════════════╝${RESET}
 
-  ${GREEN}Get started in 2 steps:${RESET}
+  ${GREEN}Try it now — no signup required:${RESET}
+
+  ${BOLD}$${RESET} ${DIM}npx @metrxbot/mcp-server --demo${RESET}
+
+  ${DIM}This starts the server with sample data so you can explore
+  all 23 cost intelligence tools instantly.${RESET}
+
+  ${GREEN}Ready to connect real data?${RESET}
 
   ${BOLD}1.${RESET} Get your free API key:
      ${CYAN}https://app.metrxbot.com/sign-up${RESET}
