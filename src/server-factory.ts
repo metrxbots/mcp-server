@@ -48,12 +48,14 @@ export function createMcpServer(apiKey: string, apiUrl?: string): McpServer;
  * @param client - A pre-built API client (real MetrxApiClient or DemoApiClient)
  * @returns A configured McpServer ready to be connected to a transport
  */
-export function createMcpServer(client: ApiClientLike): McpServer;
-export function createMcpServer(apiKeyOrClient: string | ApiClientLike, apiUrl?: string): McpServer {
+export function createMcpServer(client: ApiClientLike, options?: { isDemo?: boolean }): McpServer;
+export function createMcpServer(apiKeyOrClient: string | ApiClientLike, apiUrlOrOptions?: string | { isDemo?: boolean }): McpServer {
   const apiClient = typeof apiKeyOrClient === 'string'
-    ? new MetrxApiClient(apiKeyOrClient, apiUrl)
+    ? new MetrxApiClient(apiKeyOrClient, typeof apiUrlOrOptions === 'string' ? apiUrlOrOptions : undefined)
     : apiKeyOrClient;
+  const isDemo = typeof apiKeyOrClient !== 'string' && typeof apiUrlOrOptions === 'object' && apiUrlOrOptions?.isDemo === true;
   const rateLimiter = new RateLimiter();
+  let demoToolCallCount = 0;
 
   const server = new McpServer({
     name: SERVER_NAME,
@@ -80,7 +82,20 @@ export function createMcpServer(apiKeyOrClient: string | ApiClientLike, apiUrl?:
           isError: true,
         };
       }
-      return handler(...handlerArgs);
+      const result = await handler(...handlerArgs);
+
+      // In demo mode, append a subtle upgrade CTA every 5 tool calls
+      if (isDemo) {
+        demoToolCallCount++;
+        if (demoToolCallCount % 5 === 0 && result?.content?.length > 0) {
+          result.content.push({
+            type: 'text' as const,
+            text: '\n---\n💡 You\'re using demo data. Connect real agents to track actual costs → https://app.metrxbot.com/sign-up?source=mcp-demo',
+          });
+        }
+      }
+
+      return result;
     };
 
     // Register with metrx_ prefix (primary name only — no deprecated aliases)

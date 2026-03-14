@@ -10,7 +10,7 @@
  * The saved key is read at startup so users don't need to set env vars.
  */
 
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
@@ -82,7 +82,11 @@ export function writeRcFile(apiKey: string): void {
 // ── Validate key format ──
 
 export function isValidKeyFormat(key: string): boolean {
-  return key.startsWith('sk_live_') || key.startsWith('sk_test_');
+  return (
+    key.startsWith('sk_live_') ||
+    key.startsWith('sk_test_') ||
+    key.startsWith('mk_')
+  );
 }
 
 // ── Open URL in browser ──
@@ -136,13 +140,13 @@ export async function runAuthFlow(): Promise<void> {
     console.error('');
   }
 
-  // Step 1: Open browser
+  // Step 1: Open browser — signup page first (works for new AND existing users)
   console.error(`  ${BOLD}Step 1:${RESET} Get your API key\n`);
-  console.error(`  ${DIM}Opening ${CYAN}${API_KEY_SETTINGS_URL}${RESET}${DIM} in your browser…${RESET}`);
+  console.error(`  ${DIM}Opening ${CYAN}${SIGNUP_URL}${RESET}${DIM} in your browser…${RESET}`);
   console.error(`  ${DIM}(If it doesn't open, visit the URL above manually)${RESET}`);
-  console.error(`  ${DIM}New to Metrx? Sign up free at ${CYAN}${SIGNUP_URL}${RESET}\n`);
+  console.error(`  ${DIM}Already have an account? Go to ${CYAN}${API_KEY_SETTINGS_URL}${RESET}\n`);
 
-  await openUrl(API_KEY_SETTINGS_URL);
+  await openUrl(SIGNUP_URL);
 
   // Step 2: Prompt for key
   console.error(`  ${BOLD}Step 2:${RESET} Paste your API key below\n`);
@@ -155,7 +159,7 @@ export async function runAuthFlow(): Promise<void> {
 
   // Validate format
   if (!isValidKeyFormat(apiKey)) {
-    console.error(`\n  ${RED}✗ Invalid key format.${RESET} Expected ${DIM}sk_live_…${RESET} or ${DIM}sk_test_…${RESET}`);
+    console.error(`\n  ${RED}✗ Invalid key format.${RESET} Expected ${DIM}sk_live_…${RESET}, ${DIM}sk_test_…${RESET}, or ${DIM}mk_…${RESET}`);
     console.error(`  Get a valid key at: ${CYAN}${API_KEY_SETTINGS_URL}${RESET}\n`);
     process.exit(1);
   }

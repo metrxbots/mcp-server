@@ -75,8 +75,8 @@ if (process.argv.includes('--demo')) {
     }
 
     // Validate key format
-    if (!apiKey.startsWith('sk_live_') && !apiKey.startsWith('sk_test_')) {
-      console.log(`  ${RED}✗ API key format looks wrong${RESET} (expected sk_live_… or sk_test_…)`);
+    if (!apiKey.startsWith('sk_live_') && !apiKey.startsWith('sk_test_') && !apiKey.startsWith('mk_')) {
+      console.log(`  ${RED}✗ API key format looks wrong${RESET} (expected sk_live_…, sk_test_…, or mk_…)`);
       console.log(`\n  Get a valid key at: ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
       process.exit(1);
     }
@@ -191,7 +191,7 @@ async function runDemoServer(): Promise<void> {
   void pingDemoTelemetry();
 
   const demoClient = new DemoApiClient();
-  const server = createMcpServer(demoClient);
+  const server = createMcpServer(demoClient, { isDemo: true });
 
   const transport = new StdioServerTransport();
   await server.connect(transport);
