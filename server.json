@@ -17,7 +17,7 @@
       },
       "environmentVariables": [
         {
-          "description": "Your Metrx API key (sign up free at https://app.metrxbot.com/sign-up — manage keys at https://app.metrxbot.com/settings/security)",
+          "description": "Your Metrx API key (sign up free at https://app.metrxbot.com/sign-up?source=mcp — manage keys at https://app.metrxbot.com/settings/security)",
           "isRequired": true,
           "format": "string",
           "isSecret": true,

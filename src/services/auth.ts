@@ -20,7 +20,7 @@ import { MetrxApiClient } from './api-client.js';
 
 const RC_FILENAME = '.metrxrc';
 const API_KEY_SETTINGS_URL = 'https://app.metrxbot.com/settings/security';
-const SIGNUP_URL = 'https://app.metrxbot.com/sign-up';
+const SIGNUP_URL = 'https://app.metrxbot.com/sign-up?source=mcp';
 
 // ── ANSI colors ──
 

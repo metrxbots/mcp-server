@@ -14,7 +14,7 @@ import type { ApiResponse } from '../types.js';
 // API Docs URL for error messages
 const API_DOCS_URL = 'https://docs.metrxbot.com';
 const API_KEY_SETTINGS_URL = 'https://app.metrxbot.com/settings/security';
-const ONBOARD_URL = 'https://app.metrxbot.com/sign-up';
+const ONBOARD_URL = 'https://app.metrxbot.com/sign-up?source=mcp';
 
 export class MetrxApiClient {
   private readonly baseUrl: string;

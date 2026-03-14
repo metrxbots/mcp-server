@@ -38,7 +38,7 @@ ${CYAN}${BOLD}  ╔════════════════════�
   ${GREEN}Ready to connect real data?${RESET}
 
   ${BOLD}1.${RESET} Get your free API key:
-     ${CYAN}https://app.metrxbot.com/sign-up${RESET}
+     ${CYAN}https://app.metrxbot.com/sign-up?source=mcp${RESET}
 
   ${BOLD}2.${RESET} Test your connection:
      ${DIM}METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test${RESET}
