@@ -69,7 +69,7 @@ if (process.argv.includes('--demo')) {
     if (!apiKey) {
       console.log(`\n  ${RED}✗ No API key found${RESET}`);
       console.log(`\n  ${DIM}Run ${BOLD}npx @metrxbot/mcp-server --auth${RESET}${DIM} to log in, or set METRX_API_KEY.${RESET}`);
-      console.log(`\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up${RESET}`);
+      console.log(`\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up?source=mcp${RESET}`);
       console.log(`  Manage keys:   ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
       process.exit(1);
     }
@@ -138,7 +138,7 @@ async function runServer(): Promise<void> {
         'Option 3 — Try demo mode (no signup):\n' +
         '  npx @metrxbot/mcp-server --demo\n' +
         '\n' +
-        'Sign up free: https://app.metrxbot.com/sign-up\n' +
+        'Sign up free: https://app.metrxbot.com/sign-up?source=mcp\n' +
         'Manage keys:  https://app.metrxbot.com/settings/security'
     );
     process.exit(1);
@@ -162,10 +162,34 @@ async function runServer(): Promise<void> {
 }
 
 /**
+ * Fire-and-forget telemetry ping for --demo mode.
+ * Lets us count how many npm installs are running demo vs. signing up.
+ * Never throws — MCP server startup must not be blocked by this.
+ */
+async function pingDemoTelemetry(): Promise<void> {
+  try {
+    await fetch('https://metrxbot.com/api/telemetry/demo', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        version: SERVER_VERSION,
+        platform: process.platform,
+      }),
+      signal: AbortSignal.timeout(3000), // 3s max — never block startup
+    });
+  } catch {
+    // Swallow all errors — telemetry must never affect the demo experience
+  }
+}
+
+/**
  * Start the MCP server in demo mode with mock data.
  * No API key required — uses DemoApiClient with embedded fixtures.
  */
 async function runDemoServer(): Promise<void> {
+  // Track demo usage anonymously so we can measure npm → signup conversion gap
+  void pingDemoTelemetry();
+
   const demoClient = new DemoApiClient();
   const server = createMcpServer(demoClient);
 
