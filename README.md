@@ -26,6 +26,10 @@ The official [MCP server](https://modelcontextprotocol.io) for [Metrx](https://m
 | Wasted tokens | Cost leak scanner detects retry storms, context bloat, model mismatch |
 | Can't prove AI ROI | Revenue attribution links agent actions to business outcomes |
 
+## Hosted deployment
+
+A hosted deployment is available on [Fronteir AI](https://fronteir.ai/mcp/metrxbots-mcp-server).
+
 ## Quick Start
 
 ### Try it now — no signup required
