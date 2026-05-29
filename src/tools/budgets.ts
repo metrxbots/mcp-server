@@ -90,8 +90,10 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
       },
     },
     async ({ agent_id, period, limit_dollars, warning_pct, enforcement_mode }) => {
-      // Convert dollars to microcents (1 dollar = 100_000_000 microcents)
-      const limit_microcents = Math.round(limit_dollars * 100_000_000);
+      // Convert dollars to microcents.
+      // Convention: 1 cent = 10,000 microcents → 1 dollar = 1,000,000 microcents.
+      // Source of truth: apps/gateway/src/cost.ts.
+      const limit_microcents = Math.round(limit_dollars * 1_000_000);
 
       const body: Record<string, unknown> = {
         period,

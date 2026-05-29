@@ -5,13 +5,15 @@
  * Used by compare_models (optimization.ts) and cost-leak-detector.ts
  * for client-side model comparisons and cross-provider arbitrage checks.
  *
- * Prices are in USD per 1M tokens as of 2025 Q1.
- * Update this file when providers change pricing.
+ * Prices are in USD per 1M tokens, reconciled against the gateway pricing table
+ * (agentledger apps/gateway/src/cost.ts — verified against provider pricing pages
+ * as of May 2026). Update this file when providers change pricing or when the
+ * gateway table changes.
  *
- * Providers covered: openai, anthropic, google, mistral, cohere
+ * Providers covered: openai, anthropic, google, xai, mistral, cohere
  */
 
-export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'mistral' | 'cohere';
+export type ModelProvider = 'openai' | 'anthropic' | 'google' | 'xai' | 'mistral' | 'cohere';
 export type ModelTier = 'frontier' | 'balanced' | 'efficient' | 'budget';
 
 export interface ModelPricingEntry {
@@ -75,6 +77,56 @@ export const MODEL_PRICING: Record<string, ModelPricingEntry> = {
     supports_batch: true,
     supports_caching: false,
   },
+  'gpt-4': {
+    model: 'gpt-4',
+    provider: 'openai',
+    tier: 'frontier',
+    input_cost_per_1m: 30.0,
+    output_cost_per_1m: 60.0,
+    context_window: 8_192,
+    supports_batch: true,
+    supports_caching: false,
+  },
+  'gpt-5.2': {
+    model: 'gpt-5.2',
+    provider: 'openai',
+    tier: 'frontier',
+    input_cost_per_1m: 1.75,
+    output_cost_per_1m: 14.0,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  o1: {
+    model: 'o1',
+    provider: 'openai',
+    tier: 'frontier',
+    input_cost_per_1m: 15.0,
+    output_cost_per_1m: 60.0,
+    context_window: 200_000,
+    supports_batch: false,
+    supports_caching: false,
+  },
+  'o1-mini': {
+    model: 'o1-mini',
+    provider: 'openai',
+    tier: 'balanced',
+    input_cost_per_1m: 3.0,
+    output_cost_per_1m: 12.0,
+    context_window: 128_000,
+    supports_batch: false,
+    supports_caching: false,
+  },
+  'o3-mini': {
+    model: 'o3-mini',
+    provider: 'openai',
+    tier: 'efficient',
+    input_cost_per_1m: 1.1,
+    output_cost_per_1m: 4.4,
+    context_window: 200_000,
+    supports_batch: false,
+    supports_caching: false,
+  },
 
   // ── Anthropic ────────────────────────────────────────────────────────────────
   'claude-3-opus-20240229': {
@@ -128,14 +180,76 @@ export const MODEL_PRICING: Record<string, ModelPricingEntry> = {
     supports_batch: true,
     supports_caching: true,
   },
+  // Anthropic — current generation (May 2026, verified via gateway cost.ts).
+  'claude-opus-4-7': {
+    model: 'claude-opus-4-7',
+    provider: 'anthropic',
+    tier: 'frontier',
+    input_cost_per_1m: 5.0,
+    output_cost_per_1m: 25.0,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'claude-opus-4-6': {
+    model: 'claude-opus-4-6',
+    provider: 'anthropic',
+    tier: 'frontier',
+    input_cost_per_1m: 5.0,
+    output_cost_per_1m: 25.0,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'claude-sonnet-4-6': {
+    model: 'claude-sonnet-4-6',
+    provider: 'anthropic',
+    tier: 'balanced',
+    input_cost_per_1m: 3.0,
+    output_cost_per_1m: 15.0,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'claude-haiku-4-5': {
+    model: 'claude-haiku-4-5',
+    provider: 'anthropic',
+    tier: 'efficient',
+    input_cost_per_1m: 1.0,
+    output_cost_per_1m: 5.0,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'claude-opus-4': {
+    model: 'claude-opus-4',
+    provider: 'anthropic',
+    tier: 'frontier',
+    input_cost_per_1m: 15.0,
+    output_cost_per_1m: 75.0,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'claude-haiku-4': {
+    model: 'claude-haiku-4',
+    provider: 'anthropic',
+    tier: 'budget',
+    input_cost_per_1m: 0.25,
+    output_cost_per_1m: 1.25,
+    context_window: 200_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
 
   // ── Google ───────────────────────────────────────────────────────────────────
   'gemini-1.5-pro': {
     model: 'gemini-1.5-pro',
     provider: 'google',
     tier: 'frontier',
-    input_cost_per_1m: 3.5,
-    output_cost_per_1m: 10.5,
+    // Updated May 2026: Google cut pricing to $1.25 / $3.75 per 1M (gateway cost.ts).
+    input_cost_per_1m: 1.25,
+    output_cost_per_1m: 3.75,
     context_window: 2_000_000,
     supports_batch: true,
     supports_caching: true,
@@ -159,6 +273,78 @@ export const MODEL_PRICING: Record<string, ModelPricingEntry> = {
     context_window: 1_000_000,
     supports_batch: true,
     supports_caching: true,
+  },
+  'gemini-2.0-flash': {
+    model: 'gemini-2.0-flash',
+    provider: 'google',
+    tier: 'efficient',
+    input_cost_per_1m: 0.1,
+    output_cost_per_1m: 0.4,
+    context_window: 1_000_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'gemini-2.0-pro': {
+    model: 'gemini-2.0-pro',
+    provider: 'google',
+    tier: 'frontier',
+    input_cost_per_1m: 1.25,
+    output_cost_per_1m: 5.0,
+    context_window: 2_000_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'gemini-2.5-pro': {
+    model: 'gemini-2.5-pro',
+    provider: 'google',
+    tier: 'frontier',
+    input_cost_per_1m: 1.25,
+    output_cost_per_1m: 10.0,
+    context_window: 2_000_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'gemini-2.5-flash': {
+    model: 'gemini-2.5-flash',
+    provider: 'google',
+    tier: 'efficient',
+    input_cost_per_1m: 0.3,
+    output_cost_per_1m: 2.5,
+    context_window: 1_000_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+  'gemini-2.5-flash-lite': {
+    model: 'gemini-2.5-flash-lite',
+    provider: 'google',
+    tier: 'budget',
+    input_cost_per_1m: 0.1,
+    output_cost_per_1m: 0.4,
+    context_window: 1_000_000,
+    supports_batch: true,
+    supports_caching: true,
+  },
+
+  // ── xAI (Grok) ───────────────────────────────────────────────────────────────
+  'grok-2': {
+    model: 'grok-2',
+    provider: 'xai',
+    tier: 'balanced',
+    input_cost_per_1m: 2.0,
+    output_cost_per_1m: 10.0,
+    context_window: 131_072,
+    supports_batch: false,
+    supports_caching: false,
+  },
+  'grok-2-mini': {
+    model: 'grok-2-mini',
+    provider: 'xai',
+    tier: 'efficient',
+    input_cost_per_1m: 0.5,
+    output_cost_per_1m: 2.5,
+    context_window: 131_072,
+    supports_batch: false,
+    supports_caching: false,
   },
 
   // ── Mistral ──────────────────────────────────────────────────────────────────
@@ -257,6 +443,15 @@ const MODEL_ALIASES: Record<string, string> = {
   'claude-3-5-haiku': 'claude-3-5-haiku-20241022',
   'claude-3-haiku': 'claude-3-haiku-20240307',
   'claude-sonnet-4': 'claude-sonnet-4-20250514',
+  // Anthropic 4.x / 4.5 / 4.6 / 4.7 aliases — match the gateway cost table model IDs.
+  'claude-opus-4-7-20260301': 'claude-opus-4-7',
+  'claude-opus-4-6-20260101': 'claude-opus-4-6',
+  'claude-sonnet-4-6-20260101': 'claude-sonnet-4-6',
+  'claude-haiku-4-5-20251001': 'claude-haiku-4-5',
+  'claude-haiku-4-20251001': 'claude-haiku-4',
+  // xAI Grok aliases
+  'grok-2-latest': 'grok-2',
+  'grok-2-mini-latest': 'grok-2-mini',
   // Google aliases
   'gemini-pro': 'gemini-1.5-pro',
   'gemini-flash': 'gemini-1.5-flash',
