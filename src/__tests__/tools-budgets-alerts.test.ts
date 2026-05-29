@@ -163,7 +163,7 @@ describe('set_budget Handler', () => {
     expect(mockClient.post).toHaveBeenCalledWith(
       '/budgets',
       expect.objectContaining({
-        limit_microcents: 10000000000, // 100 * 100_000_000
+        limit_microcents: 100_000_000, // 100 * 1_000_000 (1 cent = 10,000 microcents)
       })
     );
   });
@@ -184,7 +184,7 @@ describe('set_budget Handler', () => {
     // Verify the structure contains the essential fields
     const callArgs = (mockClient.post as any).mock.calls[0][1];
     expect(callArgs.period).toBe('daily');
-    expect(callArgs.limit_microcents).toBe(5000000000);
+    expect(callArgs.limit_microcents).toBe(50_000_000); // 50 * 1_000_000
   });
 
   it('should create agent-specific budget when agent_id provided', async () => {

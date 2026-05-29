@@ -43,17 +43,18 @@ describe('Phase 1: Discovery — Package & Pricing', () => {
     it('should have correct server name', () => {
       expect(SERVER_NAME).toBe('metrx-mcp-server');
     });
-    it('should have version 0.2.2', () => {
-      expect(SERVER_VERSION).toBe('0.2.2');
+    it('should have version 0.2.5', () => {
+      expect(SERVER_VERSION).toBe('0.2.5');
     });
   });
 
   describe('Model Pricing — Complete Coverage', () => {
-    it('should have 18+ models across 5 providers', () => {
+    it('should have 18+ models across 6 providers', () => {
       const models = Object.keys(MODEL_PRICING);
       expect(models.length).toBeGreaterThanOrEqual(18);
       const providers = getCoveredProviders();
-      expect(providers).toEqual(['anthropic', 'cohere', 'google', 'mistral', 'openai']);
+      // xAI added in 0.2.4 reconcile with gateway cost.ts (May 2026).
+      expect(providers).toEqual(['anthropic', 'cohere', 'google', 'mistral', 'openai', 'xai']);
     });
 
     it('should resolve all aliases correctly', () => {
@@ -85,7 +86,9 @@ describe('Phase 1: Discovery — Package & Pricing', () => {
         expect(entry.output_cost_per_1m).toBeGreaterThanOrEqual(0);
         expect(entry.context_window).toBeGreaterThan(0);
         expect(['frontier', 'balanced', 'efficient', 'budget']).toContain(entry.tier);
-        expect(['openai', 'anthropic', 'google', 'mistral', 'cohere']).toContain(entry.provider);
+        expect(['openai', 'anthropic', 'google', 'xai', 'mistral', 'cohere']).toContain(
+          entry.provider
+        );
       }
     });
 
@@ -119,8 +122,8 @@ describe('Phase 1: Discovery — Package & Pricing', () => {
       expect(formatCents(-500)).toBe('$-5.00');
     });
     it('formatMicrocents handles large values', () => {
-      // 1 dollar = 100_000_000 microcents
-      expect(formatMicrocents(100_000_000)).toBe('$1.00');
+      // 1 dollar = 1_000_000 microcents (1 cent = 10,000 microcents)
+      expect(formatMicrocents(1_000_000)).toBe('$1.00');
     });
     it('formatMicrocents handles zero', () => {
       expect(formatMicrocents(0)).toBe('$0.00');
@@ -536,7 +539,7 @@ describe('Phase 7: ICP Persona — AI Platform Lead', () => {
     // Step 2: Set a new budget
     const newBudget = await client.post<any>('/budgets', {
       name: 'Q1 AI Budget',
-      limit_microcents: 500 * 100_000_000, // $500
+      limit_microcents: 500 * 1_000_000, // $500
       period: 'monthly',
       enforcement_mode: 'soft',
       warning_pct: 80,
@@ -619,18 +622,18 @@ describe('Phase 8: Error Message Quality', () => {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 describe('Phase 9: Microcents Math', () => {
-  it('$1.00 = 100_000_000 microcents', () => {
-    const microcents = 100_000_000;
-    const dollars = microcents / 100_000_000;
+  it('$1.00 = 1_000_000 microcents (1 cent = 10,000 microcents)', () => {
+    const microcents = 1_000_000;
+    const dollars = microcents / 1_000_000;
     expect(dollars).toBe(1);
   });
 
   it('budget set_budget converts dollars to microcents correctly', () => {
     const limitDollars = 500;
-    const limitMicrocents = limitDollars * 100_000_000;
-    expect(limitMicrocents).toBe(50_000_000_000);
+    const limitMicrocents = limitDollars * 1_000_000;
+    expect(limitMicrocents).toBe(500_000_000);
     // Convert back
-    expect(limitMicrocents / 100_000_000).toBe(500);
+    expect(limitMicrocents / 1_000_000).toBe(500);
   });
 
   it('cents to dollars conversion is correct', () => {

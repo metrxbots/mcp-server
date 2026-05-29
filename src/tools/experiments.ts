@@ -50,7 +50,7 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
         auto_promote: z
           .boolean()
           .default(false)
-          .describe('Automatically apply the winning model when the experiment concludes'),
+          .describe('Automatically apply the winning model when the experiment completes'),
       },
       annotations: {
         readOnlyHint: false,

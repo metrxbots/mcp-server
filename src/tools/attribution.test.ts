@@ -181,96 +181,80 @@ describe('Attribution Tools', () => {
       expect(tools['get_attribution_report'].inputSchema.title).toBe('Get Attribution Report');
     });
 
-    it('should return formatted report with agent_id filter', async () => {
+    // The flat `/api/outcomes` list shape used by all tests below.
+    // Source: agentledger apps/web/app/api/outcomes/route.ts GET handler.
+    const AGENT_A = {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      name: 'Sales Bot',
+      agent_key: 'sales-bot',
+      category: 'sales',
+    };
+    const AGENT_B = { id: 'agent-2', name: 'Agent 2', agent_key: 'agent-2', category: 'ops' };
+
+    function flatOutcome(
+      type: string,
+      cents: number,
+      agent: typeof AGENT_A | typeof AGENT_B | null = AGENT_A
+    ) {
+      return {
+        id: `o-${Math.random()}`,
+        outcome_type: type,
+        occurred_at: new Date().toISOString(),
+        value_cents: cents,
+        effective_value_cents: cents,
+        source: 'manual',
+        attribution_count: 1,
+        agents: agent,
+      };
+    }
+
+    it('aggregates the flat outcomes list and filters by agent_id', async () => {
       const mockResponse = {
         data: {
-          agent_id: '550e8400-e29b-41d4-a716-446655440000',
-          period_days: 30,
-          model: 'direct',
-          total_outcomes: 5,
-          total_value_cents: 50000,
-          outcomes: [
-            {
-              outcome_type: 'revenue',
-              count: 3,
-              value_cents: 30000,
-              confidence: 0.95,
-              top_attributions: [
-                {
-                  agent_id: '550e8400-e29b-41d4-a716-446655440000',
-                  agent_name: 'Sales Bot',
-                  contribution_value_cents: 25000,
-                  confidence: 0.9,
-                },
-              ],
-            },
-            {
-              outcome_type: 'efficiency',
-              count: 2,
-              value_cents: 20000,
-              confidence: 0.8,
-              top_attributions: [],
-            },
+          data: [
+            flatOutcome('revenue', 10_000, AGENT_A),
+            flatOutcome('revenue', 15_000, AGENT_A),
+            flatOutcome('revenue', 5_000, AGENT_A),
+            flatOutcome('efficiency', 10_000, AGENT_A),
+            flatOutcome('efficiency', 10_000, AGENT_A),
+            flatOutcome('revenue', 99_999_999, AGENT_B), // excluded by agent_id filter
           ],
+          meta: { count: 6, days: 30 },
         },
       };
 
       (mockApiClient.get as any).mockResolvedValueOnce(mockResponse);
 
       const result = await tools['get_attribution_report'].handler({
-        agent_id: '550e8400-e29b-41d4-a716-446655440000',
+        agent_id: AGENT_A.id,
         days: 30,
         model: 'direct',
       });
 
-      expect(result.content[0].text).toContain('Attribution Report');
-      expect(result.content[0].text).toContain('Last 30 days');
-      expect(result.content[0].text).toContain('direct');
-      expect(result.content[0].text).toContain('550e8400-e29b-41d4-a716-446655440000');
-      expect(result.content[0].text).toContain('Total Outcomes');
-      expect(result.content[0].text).toContain('5');
-      expect(result.content[0].text).toContain('$500.00');
-      expect(result.content[0].text).toContain('revenue');
-      expect(result.content[0].text).toContain('efficiency');
-      expect(result.content[0].text).toContain('Sales Bot');
-      expect(result.content[0].text).toContain('90%');
+      const text = result.content[0].text;
+      expect(text).toContain('Attribution Report');
+      expect(text).toContain('Last 30 days');
+      expect(text).toContain('direct');
+      expect(text).toContain(AGENT_A.id);
+      expect(text).toContain('Total Outcomes');
+      expect(text).toContain('5');
+      expect(text).toContain('$500.00');
+      expect(text).toContain('revenue');
+      expect(text).toContain('efficiency');
+      expect(text).toContain('Sales Bot');
+      expect(text).not.toContain('Agent 2'); // filtered out
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/outcomes', {
-        agent_id: '550e8400-e29b-41d4-a716-446655440000',
-        days: 30,
-        model: 'direct',
-      });
+      expect(mockApiClient.get).toHaveBeenCalledWith('/outcomes', { days: 30 });
     });
 
     it('should return fleet-wide report when no agent_id provided', async () => {
       const mockResponse = {
         data: {
-          period_days: 30,
-          model: 'last_touch',
-          total_outcomes: 10,
-          total_value_cents: 100000,
-          outcomes: [
-            {
-              outcome_type: 'revenue',
-              count: 10,
-              value_cents: 100000,
-              confidence: 0.9,
-              top_attributions: [
-                {
-                  agent_id: 'agent-1',
-                  agent_name: 'Agent 1',
-                  contribution_value_cents: 60000,
-                  confidence: 0.85,
-                },
-                {
-                  agent_id: 'agent-2',
-                  agent_name: 'Agent 2',
-                  contribution_value_cents: 40000,
-                  confidence: 0.8,
-                },
-              ],
-            },
+          data: [
+            flatOutcome('revenue', 60_000, { ...AGENT_A, id: 'agent-1', name: 'Agent 1' }),
+            flatOutcome('revenue', 40_000, AGENT_B),
           ],
+          meta: { count: 2, days: 30 },
         },
       };
 
@@ -281,36 +265,22 @@ describe('Attribution Tools', () => {
         model: 'last_touch',
       });
 
-      expect(result.content[0].text).toContain('Fleet-wide (all agents)');
-      expect(result.content[0].text).toContain('last_touch');
-      expect(result.content[0].text).not.toContain('**Agent**:');
-      expect(result.content[0].text).toContain('Agent 1');
-      expect(result.content[0].text).toContain('Agent 2');
-      expect(result.content[0].text).toContain('$600.00');
-      expect(result.content[0].text).toContain('$400.00');
-
-      expect(mockApiClient.get).toHaveBeenCalledWith('/outcomes', {
-        days: 30,
-        model: 'last_touch',
-      });
+      const text = result.content[0].text;
+      expect(text).toContain('Fleet-wide (all agents)');
+      expect(text).toContain('last_touch');
+      expect(text).not.toContain('**Agent**:');
+      expect(text).toContain('Agent 1');
+      expect(text).toContain('Agent 2');
+      expect(text).toContain('$600.00');
+      expect(text).toContain('$400.00');
     });
 
     it('should handle empty outcomes', async () => {
-      const mockResponse = {
-        data: {
-          period_days: 7,
-          model: 'direct',
-          total_outcomes: 0,
-          total_value_cents: 0,
-          outcomes: [],
-        },
-      };
-
-      (mockApiClient.get as any).mockResolvedValueOnce(mockResponse);
-
-      const result = await tools['get_attribution_report'].handler({
-        days: 7,
+      (mockApiClient.get as any).mockResolvedValueOnce({
+        data: { data: [], meta: { count: 0, days: 7 } },
       });
+
+      const result = await tools['get_attribution_report'].handler({ days: 7 });
 
       expect(result.content[0].text).toContain('No outcomes recorded in this period');
       expect(result.isError).toBeFalsy();
@@ -321,9 +291,7 @@ describe('Attribution Tools', () => {
         error: 'Failed to fetch outcomes',
       });
 
-      const result = await tools['get_attribution_report'].handler({
-        days: 30,
-      });
+      const result = await tools['get_attribution_report'].handler({ days: 30 });
 
       expect(result.isError).toBeTruthy();
       expect(result.content[0].text).toContain('Error fetching attribution report');
@@ -331,81 +299,31 @@ describe('Attribution Tools', () => {
     });
 
     it('should use default days (30) when not provided', async () => {
-      const mockResponse = {
-        data: {
-          period_days: 30,
-          model: 'direct',
-          total_outcomes: 0,
-          total_value_cents: 0,
-          outcomes: [],
-        },
-      };
-
-      (mockApiClient.get as any).mockResolvedValueOnce(mockResponse);
+      (mockApiClient.get as any).mockResolvedValueOnce({
+        data: { data: [], meta: { count: 0, days: 30 } },
+      });
 
       await tools['get_attribution_report'].handler({});
 
-      expect(mockApiClient.get).toHaveBeenCalledWith('/outcomes', {
-        days: 30,
-        model: 'direct',
-      });
+      // The new behavior: only `days` is sent — `model` and `agent_id` are handled client-side.
+      expect(mockApiClient.get).toHaveBeenCalledWith('/outcomes', { days: 30 });
     });
 
-    it('should format confidence as percentage', async () => {
-      const mockResponse = {
-        data: {
-          period_days: 30,
-          model: 'direct',
-          total_outcomes: 1,
-          total_value_cents: 10000,
-          outcomes: [
-            {
-              outcome_type: 'revenue',
-              count: 1,
-              value_cents: 10000,
-              confidence: 0.75,
-              top_attributions: [
-                {
-                  agent_id: 'agent-1',
-                  agent_name: 'Bot 1',
-                  contribution_value_cents: 7500,
-                  confidence: 0.5555,
-                },
-              ],
-            },
-          ],
-        },
-      };
-
-      (mockApiClient.get as any).mockResolvedValueOnce(mockResponse);
-
-      const result = await tools['get_attribution_report'].handler({});
-
-      expect(result.content[0].text).toContain('75%');
-      expect(result.content[0].text).toContain('56%');
-    });
-
-    it('should support all attribution models', async () => {
-      const mockResponse = {
-        data: {
-          period_days: 30,
-          model: 'first_touch',
-          total_outcomes: 0,
-          total_value_cents: 0,
-          outcomes: [],
-        },
-      };
-
-      (mockApiClient.get as any).mockResolvedValueOnce(mockResponse);
-
-      await tools['get_attribution_report'].handler({
-        model: 'first_touch',
+    it('accepts the canonical attribution model enum (session_direct included)', async () => {
+      (mockApiClient.get as any).mockResolvedValueOnce({
+        data: { data: [], meta: { count: 0, days: 30 } },
       });
 
-      expect(mockApiClient.get).toHaveBeenCalledWith(
-        '/outcomes',
-        expect.objectContaining({ model: 'first_touch' })
-      );
+      const result = await tools['get_attribution_report'].handler({ model: 'session_direct' });
+      expect(result.content[0].text).toContain('session_direct');
+    });
+
+    it('also accepts first_touch / last_touch', async () => {
+      (mockApiClient.get as any).mockResolvedValueOnce({
+        data: { data: [], meta: { count: 0, days: 30 } },
+      });
+      const result = await tools['get_attribution_report'].handler({ model: 'first_touch' });
+      expect(result.content[0].text).toContain('first_touch');
     });
   });
 

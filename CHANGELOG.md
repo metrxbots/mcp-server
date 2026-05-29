@@ -8,6 +8,36 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _No unreleased changes._
 
+## [0.2.5] - 2026-05-28
+
+### Fixed
+- **Microcents unit conversion was 100× wrong** (correctness bug — affected every dollar value the server displayed or wrote).
+  Convention is `1 cent = 10,000 microcents → 1 dollar = 1,000,000 microcents` (source: `apps/gateway/src/cost.ts`).
+  The `0.2.1` "100× too high" fix was compensating for a transient backend `/100` inflation bug that the agentledger team later fixed properly; the compensating divisor in this package was never reverted, leaving costs reported **100× too low** and budgets stored **100× too high** (a `$50` cap was being persisted as `$5,000`).
+  - `src/services/formatters.ts` — `formatMicrocents` divisor `100_000_000` → `1_000_000`.
+  - `src/tools/budgets.ts` — `set_budget` `limit_dollars * 100_000_000` → `* 1_000_000`.
+  - `src/tools/attribution.ts` — `get_task_roi` cost conversions (total + by-model) corrected.
+  - Demo client fixtures (`src/services/demo-client.ts`) re-scaled to match the corrected convention so demo dollar figures match the formatter output.
+  - Regression suite (`src/services/formatters.test.ts`) pins `formatMicrocents(1_000_000) === "$1.00"` so this class can't silently come back.
+- `get_attribution_report` (`src/tools/attribution.ts`) — the tool was sending `model` and `agent_id` query params plus expecting an aggregated response shape that the canonical `/api/outcomes` endpoint never returned. Repointed to consume the actual flat outcomes list and aggregate (count, total value, top contributing agents) client-side. Filtering by `agent_id` is now done in-process.
+- `get_attribution_report` enum updated from `['direct','last_touch','first_touch']` to the canonical `['direct','session_direct','first_touch','last_touch']` (source: `agentledger apps/web/lib/attribution/types.ts`). Note: the `/api/outcomes` endpoint ignores attribution method, so this param is informational on the report tool.
+- `get_task_roi` (`src/tools/attribution.ts`) — now sends both `days` and `start_date`/`end_date` so the tool works against the legacy `/api/agents/:id/roi` (days-only) and the date-range-aware backend shipping alongside this release.
+- `src/tools/model-pricing.ts` — reconciled the pricing map against `agentledger apps/gateway/src/cost.ts` (May 2026 verified). Added current-generation models: `gpt-5.2`, `gpt-4`, `o1`, `o1-mini`, `o3-mini`, `claude-opus-4-7`, `claude-opus-4-6`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `claude-opus-4`, `claude-haiku-4`, `gemini-2.0-flash`, `gemini-2.0-pro`, `gemini-2.5-pro`, `gemini-2.5-flash`, `gemini-2.5-flash-lite`, `grok-2`, `grok-2-mini`. Corrected `gemini-1.5-pro` to `$1.25 / $3.75` per 1M (Google price cut). Added the `xai` provider and dated the table to May 2026.
+- `src/tools/experiments.ts` — `auto_promote` description now says "completes" to match the actual status enum (`draft|running|paused|completed`).
+
+### Changed
+- Version locations synchronized to `0.2.5` across `package.json`, `server.json` (×2), `smithery.yaml`, `src/constants.ts`, and version-pinning tests (`api-client.test.ts`, `server-integration.test.ts`, `comprehensive-funnel.test.ts`).
+
+## [0.2.3] - 2026-03-13 (unreleased prior to 0.2.5)
+
+### Added
+- Telemetry ping to `/api/telemetry/demo` on `--demo` startup so we can measure npm-install → signup conversion.
+- `?source=mcp` UTM attribution on every signup URL surfaced to users (auth flow, postinstall banner, README, error messages).
+
+### Fixed
+- Rate limiter — explicit tool→category mapping (BUG-1) so tools registered across multiple domains are rate-limited under the right bucket.
+- Closed several gaps in the NPM → signup funnel.
+
 ## [0.2.2] - 2026-03-11
 
 ### Added

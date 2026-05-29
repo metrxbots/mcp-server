@@ -22,9 +22,11 @@ export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-/** Format microcents as dollar string */
+/** Format microcents as dollar string.
+ *  Convention: 1 cent = 10,000 microcents → 1 dollar = 1,000,000 microcents.
+ *  Source of truth: apps/gateway/src/cost.ts and apps/web/lib/customers/customer-costs.ts. */
 export function formatMicrocents(microcents: number): string {
-  return `$${(microcents / 100_000_000).toFixed(2)}`;
+  return `$${(microcents / 1_000_000).toFixed(2)}`;
 }
 
 /** Format a percentage */

@@ -203,8 +203,8 @@ const DEMO_BUDGET_STATUS: BudgetStatus = {
       id: DEMO_BUDGET_ID,
       period: 'monthly',
       agent_id: null,
-      limit_microcents: 20000000000, // $200/month
-      spent_microcents: 14350000000, // $143.50
+      limit_microcents: 200_000_000, // $200/month (1 dollar = 1_000_000 microcents)
+      spent_microcents: 143_500_000, // $143.50
       pct_used: 72,
       enforcement_mode: 'alert_only',
       paused: false,
@@ -215,8 +215,8 @@ const DEMO_BUDGET_STATUS: BudgetStatus = {
       id: 'f6a7b8c9-d0e1-2345-fabc-678901234567',
       period: 'monthly',
       agent_id: DEMO_AGENT_ID_2,
-      limit_microcents: 10000000000, // $100/month
-      spent_microcents: 8900000000, // $89
+      limit_microcents: 100_000_000, // $100/month
+      spent_microcents: 89_000_000, // $89
       pct_used: 89,
       enforcement_mode: 'soft_block',
       paused: false,
@@ -401,8 +401,8 @@ interface ROIData {
 
 const DEMO_ROI_DATA: ROIData = {
   costs: {
-    total_microcents: 4250000000, // $42.50
-    by_model: { 'gpt-4o': 4250000000 },
+    total_microcents: 42_500_000, // $42.50
+    by_model: { 'gpt-4o': 42_500_000 },
     avg_per_request: 425000, // $0.00425
   },
   outcomes: {
@@ -696,7 +696,7 @@ export class DemoApiClient {
         const config: BudgetConfig = {
           id: 'demo-new-budget-' + Date.now(),
           period: (body?.period as 'daily' | 'monthly') || 'monthly',
-          limit_microcents: (body?.limit_microcents as number) || 10000000000,
+          limit_microcents: (body?.limit_microcents as number) || 100_000_000,
           warning_pct: (body?.warning_pct as number) || 80,
           enforcement_mode: (body?.enforcement_mode as 'alert_only' | 'soft_block' | 'hard_block') || 'alert_only',
           paused: false,
@@ -785,7 +785,7 @@ export class DemoApiClient {
         const config: BudgetConfig = {
           id: budgetPatch.params.id,
           period: 'monthly',
-          limit_microcents: existing?.limit_microcents || 10000000000,
+          limit_microcents: existing?.limit_microcents || 100_000_000,
           warning_pct: 80,
           enforcement_mode:
             (body?.enforcement_mode as 'alert_only' | 'soft_block' | 'hard_block') || 'alert_only',
