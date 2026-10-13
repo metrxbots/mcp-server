@@ -23,8 +23,25 @@ export interface AgentSummary {
   status: string;
   is_background: boolean;
   last_call_at?: string;
-  monthly_cost_cents?: number;
+  /** Window LLM cost (cents). null = the cost read failed, never 0. */
+  monthly_cost_cents?: number | null;
+  /**
+   * Attribution fields. Each one has THREE states, and they mean different things:
+   *   - a number  → the value;
+   *   - null      → attribution is on the plan, but there is nothing to divide
+   *                 (no attributed revenue, or no cost) → "no attributed revenue";
+   *   - absent    → the plan does not include per-agent attribution (starter, lite,
+   *                 unknown tiers omit the keys entirely) → omit the line.
+   * Guard with `typeof x === 'number'`, never truthiness or `!== null`.
+   */
+  /** Attributed revenue ÷ AI cost (a return multiple, e.g. 3.2 = $3.20 per $1). */
   roi_multiplier?: number | null;
+  /** Attributed revenue − AI cost (cents). */
+  net_profit_cents?: number | null;
+  attributed_revenue_cents?: number | null;
+  attributed_outcome_count?: number | null;
+  /** Outcome-weighted attribution confidence (0–1); null = no attributed outcomes. */
+  avg_attribution_confidence?: number | null;
 }
 
 export interface AgentDetail extends AgentSummary {
@@ -53,12 +70,22 @@ export interface DashboardSummary {
     error_calls: number;
     error_rate: number;
   };
+  /**
+   * Full attribution (Pro+): every field. Summary-only (Lite): `total_outcomes`
+   * and an upgrade hint, no money. Starter / unknown tiers: null or absent.
+   */
   attribution?: {
-    total_outcomes: number;
-    total_revenue_cents: number;
-    net_value_cents: number;
-    roi_multiplier: number;
-  };
+    total_outcomes?: number;
+    total_revenue_cents?: number;
+    net_value_cents?: number;
+    /** Attributed revenue ÷ AI cost (x); null when either is 0. */
+    roi_multiplier?: number | null;
+    roi?: number | null;
+    /** Outcome-weighted attribution confidence (0–1); null = none. */
+    attribution_confidence?: number | null;
+    upgrade_hint?: string;
+    upgrade_url?: string;
+  } | null;
   optimization?: {
     total_savings_cents: number;
     suggestion_count: number;

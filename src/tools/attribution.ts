@@ -144,13 +144,16 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
           by_model: Record<string, number>;
           avg_per_request: number;
         };
-        outcomes: {
-          count: number;
-          total_value_cents: number;
-          by_type: Record<string, number>;
+        // Attribution money is optional: a plan without full attribution may omit it, and
+        // roi_multiplier / weighted_avg_confidence are null when there is nothing to divide.
+        outcomes?: {
+          count?: number;
+          total_value_cents?: number;
+          by_type?: Record<string, number>;
         };
-        roi_multiplier: number;
-        weighted_avg_confidence: number;
+        /** Attributed revenue ÷ AI cost (a return multiple); null when either is 0. */
+        roi_multiplier?: number | null;
+        weighted_avg_confidence?: number | null;
       }>(`/agents/${agent_id}/roi`, {
         // Send both so we stay compatible with older backends (which only honor `days`)
         // and the current backend (which honors start_date/end_date when present).
@@ -170,7 +173,6 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       // 1 dollar = 1,000,000 microcents (1 cent = 10,000 microcents).
       // Source of truth: apps/gateway/src/cost.ts.
       const totalCostDollars = (data.costs.total_microcents / 1_000_000).toFixed(2);
-      const totalOutcomeDollars = (data.outcomes.total_value_cents / 100).toFixed(2);
       // avg_per_request is in cents (see agentledger apps/web/lib/attribution/roi.ts).
       const avgCostDollars = (data.costs.avg_per_request / 100).toFixed(4);
 
@@ -190,10 +192,26 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
         }
       }
 
-      lines.push('', `### Outcomes: $${totalOutcomeDollars} (${data.outcomes.count} total)`);
+      const outcomes = data.outcomes;
+      const revenueCents =
+        typeof outcomes?.total_value_cents === 'number' ? outcomes.total_value_cents : undefined;
+
+      if (revenueCents === undefined) {
+        // Absent = the plan does not include attributed revenue. Say so; never "$0.00".
+        lines.push('', '### Attributed Revenue', '- Not included in your plan.');
+        return {
+          content: [{ type: 'text', text: lines.join('\n') }],
+        };
+      }
+
+      const outcomeCount = typeof outcomes?.count === 'number' ? outcomes.count : 0;
+      lines.push(
+        '',
+        `### Attributed Revenue: $${(revenueCents / 100).toFixed(2)} (${outcomeCount} outcomes)`
+      );
 
       // Outcome by type breakdown
-      const typeEntries = Object.entries(data.outcomes.by_type);
+      const typeEntries = Object.entries(outcomes?.by_type ?? {});
       if (typeEntries.length > 0) {
         lines.push('- By type:');
         for (const [type, cents] of typeEntries) {
@@ -201,28 +219,37 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
         }
       }
 
-      lines.push('', '### ROI');
-      lines.push(`- **ROI Multiplier**: ${data.roi_multiplier.toFixed(2)}x`);
+      const multiple = typeof data.roi_multiplier === 'number' ? data.roi_multiplier : null;
+      lines.push('', '### Return');
       lines.push(
-        `- **Avg Attribution Confidence**: ${(data.weighted_avg_confidence * 100).toFixed(0)}%`
+        `- **Attributed revenue multiple** (attributed revenue ÷ AI cost): ${
+          multiple === null ? 'n/a (no attributed revenue or no cost)' : `${multiple.toFixed(2)}x`
+        }`
+      );
+      lines.push(
+        `- **Avg Attribution Confidence**: ${
+          typeof data.weighted_avg_confidence === 'number'
+            ? `${(data.weighted_avg_confidence * 100).toFixed(0)}%`
+            : 'n/a (no attributed outcomes)'
+        }`
       );
 
-      if (data.roi_multiplier >= 1) {
+      if (multiple !== null && multiple >= 1) {
         lines.push(
           '',
-          `> ✅ This agent generates $${data.roi_multiplier.toFixed(
-            2
-          )} in value for every $1 spent.`
+          `> ✅ This agent has $${multiple.toFixed(2)} of attributed revenue for every $1 of AI cost.`
         );
-      } else if (data.roi_multiplier > 0) {
+      } else if (multiple !== null && multiple > 0) {
         lines.push(
           '',
-          `> ⚠️ This agent returns ${(data.roi_multiplier * 100).toFixed(
+          `> ⚠️ This agent has ${(multiple * 100).toFixed(
             0
-          )}¢ per $1 spent. Consider optimizing costs or improving outcome attribution.`
+          )}¢ of attributed revenue per $1 of AI cost. Consider optimizing costs or improving outcome attribution.`
         );
+      } else if (revenueCents > 0) {
+        lines.push('', `> 📊 No AI cost recorded in this window, so there is no multiple to show.`);
       } else {
-        lines.push('', `> 📊 No attributed outcomes yet. Connect outcomes to start measuring ROI.`);
+        lines.push('', `> 📊 No attributed revenue yet. Connect outcomes to start measuring return.`);
       }
 
       return {
