@@ -8,6 +8,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _No unreleased changes._
 
+## [0.2.6] - 2026-10-13
+
+### Fixed
+- **Crash when the Metrx API omits attribution fields for your plan.** The API leaves out attribution money on plans that do not include it: per-agent `roi_multiplier`, `net_profit_cents`, `attributed_revenue_cents`, `attributed_outcome_count` and `avg_attribution_confidence` are omitted on starter, lite and unknown tiers. On summary-only (Lite), the dashboard keeps the attributed outcome count and drops revenue, net value and the multiple. Version 0.2.5 typed these fields as `T | null` and never as absent, so it called `.toFixed()` on `undefined` (or on `null`) and threw a `TypeError`. Every reader now handles three states: a number shows the value; `null` shows "no attributed revenue"; an absent field drops the line or says the plan does not include attribution. The wording matches the hosted MCP.
+  - `generate_roi_audit` (`src/tools/roi-audit.ts`): per-agent multiple, risk flags and fleet summary. On a plan without attribution the audit no longer reports `$0.00` revenue or flags "No attribution data". It now reads `attribution_confidence`, the field the API sends; the old code read `avg_confidence` and so always showed 0%. Per-agent attributed revenue now appears when the API sends it.
+  - `get_cost_summary` → `formatDashboard` (`src/services/formatters.ts`): the summary-only attribution block and the per-agent multiple.
+  - `list_agents` (`src/tools/dashboard.ts`): per-agent multiple.
+  - `get_task_roi` (`src/tools/attribution.ts`): `roi_multiplier` and `weighted_avg_confidence` are `null` when revenue or cost is 0. Absent attribution now reads "not included in your plan".
+  - `src/types.ts`: these fields are now optional (`?:`), so the compiler flags any unguarded read.
+- **Methodology copy in `generate_roi_audit` named the wrong formula.** It said "ROI = (Attributed Revenue - Cost) / Cost", but the figure shown is attributed revenue ÷ AI cost, a return multiple. The copy and labels now say "attributed revenue multiple = Attributed Revenue ÷ AI Cost".
+
+### Changed
+- Version locations synchronized to `0.2.6` across `package.json`, `package-lock.json` (was stale at `0.2.3`), `server.json` (×2), `smithery.yaml`, `src/constants.ts`, and the version-pinning tests.
+
 ## [0.2.5] - 2026-05-28
 
 ### Fixed

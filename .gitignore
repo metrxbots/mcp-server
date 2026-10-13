@@ -12,3 +12,16 @@ coverage/
 mcp-publisher
 .mcpregistry_*
 community-responses.md
+
+# Internal instructions and operating documents — DELIBERATELY NOT PUBLISHED (CP decision, 2026-09-11).
+# This repository publishes to npm from github.com/metrxbots/mcp-server, so anything tracked here is
+# public. The Codex audit (C6) flagged these as "untracked", which is true and was read as an
+# oversight; it is a decision. A fresh clone of this repo therefore has NO Claude/Codex router, and
+# that is the accepted trade: an agent working here inherits the parent workspace's rules or none.
+# Do not "fix" this by tracking them.
+.claude
+CLAUDE.md
+AGENTS.md
+HANDOFF-*.md
+COMPREHENSIVE-TEST-REPORT.md
+github-triage-*.md

@@ -109,8 +109,17 @@ export function registerDashboardTools(server: McpServer, client: MetrxApiClient
 
       const lines: string[] = [`## Agents (${agents.length})`, ''];
       for (const agent of agents) {
-        const cost = agent.monthly_cost_cents ? formatCents(agent.monthly_cost_cents) : 'N/A';
-        const roi = agent.roi_multiplier ? ` | ${agent.roi_multiplier.toFixed(1)}x ROI` : '';
+        const cost =
+          typeof agent.monthly_cost_cents === 'number' && agent.monthly_cost_cents > 0
+            ? formatCents(agent.monthly_cost_cents)
+            : 'N/A';
+        // number → multiple; null → "no attributed revenue"; absent (plan omits it) → nothing.
+        const roi =
+          typeof agent.roi_multiplier === 'number'
+            ? ` | ${agent.roi_multiplier.toFixed(1)}x attributed revenue multiple`
+            : agent.roi_multiplier === null
+              ? ' | no attributed revenue'
+              : '';
         lines.push(
           `- **${agent.name}** [${agent.agent_key}] — ${agent.status} | ${agent.category} | ${cost}/mo${roi}`
         );

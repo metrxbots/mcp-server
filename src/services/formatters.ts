@@ -34,6 +34,20 @@ export function formatPct(value: number, decimals: number = 1): string {
   return `${(value * 100).toFixed(decimals)}%`;
 }
 
+/**
+ * Attribution fields from the Metrx API have three states (see AgentSummary):
+ * a number, null (on the plan, nothing attributed) or absent (not on the plan).
+ * This is the one place the per-agent multiple is worded; it matches the hosted
+ * MCP (agentledger packages/mcp-server/src/services/formatters.ts).
+ *
+ * Returns the suffix to append to an agent line ('' when the plan omits it).
+ */
+export function formatAgentMultipleSuffix(roi: number | null | undefined): string {
+  if (typeof roi === 'number') return `, ${roi.toFixed(1)}x attributed revenue multiple`;
+  if (roi === null) return ', no attributed revenue';
+  return '';
+}
+
 /** Format dashboard summary for LLM consumption */
 export function formatDashboard(data: DashboardSummary): string {
   const lines: string[] = [
@@ -46,12 +60,29 @@ export function formatDashboard(data: DashboardSummary): string {
   ];
 
   if (data.attribution) {
+    const a = data.attribution;
     lines.push('');
     lines.push('### Revenue Attribution');
-    lines.push(`**Outcomes**: ${data.attribution.total_outcomes}`);
-    lines.push(`**Revenue**: ${formatCents(data.attribution.total_revenue_cents)}`);
-    lines.push(`**Net Value**: ${formatCents(data.attribution.net_value_cents)}`);
-    lines.push(`**ROI**: ${data.attribution.roi_multiplier.toFixed(1)}x`);
+    if (typeof a.total_outcomes === 'number') {
+      lines.push(`**Attributed Outcomes**: ${a.total_outcomes}`);
+    }
+    // Summary-only plans carry the count and no money: say so, never "$NaN" or $0.
+    if (typeof a.total_revenue_cents === 'number') {
+      lines.push(`**Attributed Revenue**: ${formatCents(a.total_revenue_cents)}`);
+      if (typeof a.net_value_cents === 'number') {
+        lines.push(`**Net Value**: ${formatCents(a.net_value_cents)}`);
+      }
+      const roi = typeof a.roi_multiplier === 'number' ? a.roi_multiplier : null;
+      lines.push(
+        `**Attributed revenue multiple**: ${
+          roi === null ? 'n/a (no attributed revenue or no cost)' : `${roi.toFixed(1)}x`
+        }`
+      );
+    } else if (a.upgrade_hint) {
+      lines.push(`*${a.upgrade_hint}*`);
+    } else {
+      lines.push('*Your plan does not include attributed revenue.*');
+    }
   }
 
   if (data.optimization) {
@@ -70,9 +101,11 @@ export function formatDashboard(data: DashboardSummary): string {
     lines.push('');
     lines.push('### Agent Breakdown');
     for (const agent of data.agents_list) {
-      const cost = agent.monthly_cost_cents ? formatCents(agent.monthly_cost_cents) : 'N/A';
-      const roi = agent.roi_multiplier ? `${agent.roi_multiplier.toFixed(1)}x ROI` : 'no ROI data';
-      lines.push(`- **${agent.name}** (${agent.status}): ${cost}/mo, ${roi}`);
+      const cost =
+        typeof agent.monthly_cost_cents === 'number' ? formatCents(agent.monthly_cost_cents) : 'N/A';
+      // Absent roi_multiplier = "not on this plan" (no text), null = "no attributed revenue".
+      const roi = formatAgentMultipleSuffix(agent.roi_multiplier);
+      lines.push(`- **${agent.name}** (${agent.status}): ${cost}/mo${roi}`);
     }
   }
 
