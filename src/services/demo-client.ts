@@ -179,7 +179,6 @@ const DEMO_OPTIMIZATION: OptimizationResult = {
     },
   ],
   total_monthly_savings_cents: 4565,
-  total_revenue_impact_cents: 42500,
   suggestion_count: 4,
   computed_at: '2025-03-10T16:00:00Z',
   analysis_confidence: {

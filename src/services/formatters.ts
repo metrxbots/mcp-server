@@ -121,10 +121,6 @@ export function formatOptimizations(result: OptimizationResult): string {
     `**Suggestions**: ${result.suggestion_count}`,
   ];
 
-  if (result.total_revenue_impact_cents) {
-    lines.push(`**Revenue Impact**: ${formatCents(result.total_revenue_impact_cents)}/month`);
-  }
-
   if (result.analysis_confidence) {
     lines.push(
       `**Confidence**: ${result.analysis_confidence.confidence_tier} (${formatPct(
