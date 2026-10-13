@@ -3,6 +3,8 @@ name: Publish to npm
 on:
   release:
     types: [published]
+  # Manual re-run from main (e.g. when a release's publish step failed).
+  workflow_dispatch:
 
 jobs:
   publish:
@@ -14,12 +16,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use Node.js 20
+      - name: Use Node.js 22
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 22
           registry-url: https://registry.npmjs.org
           cache: npm
+
+      # npm trusted publishing (OIDC) needs npm >= 11.5.1; Node 22 ships npm 10.
+      - name: Upgrade npm for trusted publishing
+        run: npm install -g npm@11.6.2
 
       - name: Install dependencies
         run: npm ci
@@ -33,7 +39,8 @@ jobs:
       - name: Test
         run: npm test
 
+      # Authenticates via npm trusted publishing (OIDC, id-token: write above):
+      # npmjs.com package settings trust metrxbots/mcp-server publish.yml.
+      # No long-lived token; provenance is generated automatically.
       - name: Publish to npm
         run: npm publish --provenance --access public
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN2 }}

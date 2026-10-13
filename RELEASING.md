@@ -14,7 +14,8 @@ This project uses [Semantic Versioning](https://semver.org/) and publishes to np
    git push origin main --tags
    ```
 6. **Create a GitHub Release** from the new tag. Paste the changelog section as the release body.
-7. The `publish.yml` workflow runs automatically on release — it type-checks, builds, tests, and publishes to npm with provenance.
+7. The `publish.yml` workflow runs automatically on release — it type-checks, builds, tests, and publishes to npm with provenance. It authenticates with npm **trusted publishing** (OIDC): npmjs.com → package Settings → Trusted Publisher trusts `metrxbots/mcp-server` / `publish.yml`. There is no npm token secret to rotate.
+8. If the publish step fails, fix the cause on `main` and run the workflow manually: `gh workflow run publish.yml --ref main` (the release's tag still points at the old workflow).
 
 ## Version policy
 
