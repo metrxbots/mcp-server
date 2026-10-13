@@ -43,8 +43,8 @@ describe('Phase 1: Discovery — Package & Pricing', () => {
     it('should have correct server name', () => {
       expect(SERVER_NAME).toBe('metrx-mcp-server');
     });
-    it('should have version 0.2.6', () => {
-      expect(SERVER_VERSION).toBe('0.2.6');
+    it('should have version 0.2.7', () => {
+      expect(SERVER_VERSION).toBe('0.2.7');
     });
   });
 

@@ -8,6 +8,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _No unreleased changes._
 
+## [0.2.7] - 2026-10-13
+
+### Removed
+- **`total_revenue_impact_cents` and the "Revenue Impact" line in `get_optimization_recommendations`.** The hosted Metrx engine removed this field because it summed revenue figures of opposite sign, so the total did not mean anything. The real API never returned it. Only demo mode showed it, as "Revenue Impact: $425.00/month", and that line shipped in 0.2.6.
+  - `src/services/demo-client.ts`: the demo optimization fixture no longer sets the field.
+  - `src/services/formatters.ts`: `formatOptimizations` no longer renders the line. A field sent by an older backend is ignored.
+  - `src/types.ts`: the field is removed from `OptimizationResult`.
+  - Regression tests in `src/services/formatters.test.ts` check the demo output and a legacy payload.
+
+### Changed
+- Version locations synchronized to `0.2.7` across `package.json`, `package-lock.json`, `server.json` (×2), `smithery.yaml`, `src/constants.ts`, and the version-pinning tests.
+
 ## [0.2.6] - 2026-10-13
 
 ### Fixed

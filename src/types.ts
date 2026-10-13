@@ -167,7 +167,6 @@ export interface OptimizationSuggestion {
 export interface OptimizationResult {
   suggestions: OptimizationSuggestion[];
   total_monthly_savings_cents: number;
-  total_revenue_impact_cents?: number;
   suggestion_count: number;
   computed_at: string;
   analysis_confidence?: {
