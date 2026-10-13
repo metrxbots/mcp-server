@@ -39,8 +39,10 @@ jobs:
       - name: Test
         run: npm test
 
-      # Authenticates via npm trusted publishing (OIDC, id-token: write above):
-      # npmjs.com package settings trust metrxbots/mcp-server publish.yml.
-      # No long-lived token; provenance is generated automatically.
+      # npm tries trusted publishing (OIDC, id-token: write above) first when
+      # the package trusts metrxbots/mcp-server publish.yml, and falls back to
+      # the NPM_TOKEN2 secret otherwise.
       - name: Publish to npm
         run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN2 }}
