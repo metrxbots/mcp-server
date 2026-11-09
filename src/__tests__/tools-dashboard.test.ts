@@ -119,7 +119,7 @@ describe('get_cost_summary Handler', () => {
     expect(mockClient.get).toHaveBeenCalledWith(
       '/dashboard',
       expect.objectContaining({
-        period_days: 30,
+        days: 30,
       })
     );
   });
@@ -136,10 +136,7 @@ describe('get_cost_summary Handler', () => {
 
     await costSummaryHandler({ period_days: 7 });
 
-    expect(mockClient.get).toHaveBeenCalledWith(
-      '/dashboard',
-      expect.objectContaining({ period_days: 7 })
-    );
+    expect(mockClient.get).toHaveBeenCalledWith('/dashboard', expect.objectContaining({ days: 7 }));
   });
 
   it('should return error when API call fails', async () => {
@@ -294,6 +291,27 @@ describe('list_agents Handler', () => {
 
     expect(result.content[0].text).toContain('Agent No Cost');
     expect(result.content[0].text).toContain('N/A');
+  });
+
+  it('should handle unwrapped array response from real API', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({
+      data: [
+        {
+          id: '123e4567-e89b-12d3-a456-426614174000',
+          name: 'Real Agent',
+          agent_key: 'agent_real_001',
+          status: 'active',
+          category: 'engineering',
+          monthly_cost_cents: 5000,
+        },
+      ],
+    });
+
+    const result = await listAgentsHandler({});
+
+    expect(result.content[0].text).toContain('Real Agent');
+    expect(result.content[0].text).toContain('agent_real_001');
+    expect(result.content[0].text).toContain('engineering');
   });
 
   it('should return error when API fails', async () => {

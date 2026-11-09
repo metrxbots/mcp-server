@@ -8,7 +8,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetrxApiClient } from '../services/api-client.js';
-import type { AlertEvent, FailurePrediction } from '../types.js';
+import type { AlertEvent, AgentPredictionsResponse } from '../types.js';
 import { formatAlerts, formatPredictions } from '../services/formatters.js';
 
 export function registerAlertTools(server: McpServer, client: MetrxApiClient): void {
@@ -21,7 +21,7 @@ export function registerAlertTools(server: McpServer, client: MetrxApiClient): v
         'Get active alerts and notifications for your agent fleet. ' +
         'Includes cost spikes, error rate increases, budget warnings, ' +
         'and system health notifications. Optionally filter by severity. ' +
-        'Do NOT use for configuring alert triggers — use configure_alert_threshold for that.',
+        'Do NOT use for forward-looking risk — use get_failure_predictions for that.',
       inputSchema: {
         severity: z
           .enum(['info', 'warning', 'critical'])
@@ -65,7 +65,13 @@ export function registerAlertTools(server: McpServer, client: MetrxApiClient): v
         };
       }
 
-      const alerts = result.data?.alerts || [];
+      // Transform API response shape (alert_type/read_at) → MCP shape (type/is_read)
+      const rawAlerts = result.data?.alerts || [];
+      const alerts: AlertEvent[] = rawAlerts.map((a: any) => ({
+        ...a,
+        type: a.type || a.alert_type,
+        is_read: a.is_read ?? a.read_at != null,
+      }));
       const text = formatAlerts(alerts);
 
       return {
@@ -118,26 +124,27 @@ export function registerAlertTools(server: McpServer, client: MetrxApiClient): v
   );
 
   // ── get_failure_predictions ──
+  // GET /api/agents/{id}/optimization/predictions. Until W1-4b this tool called
+  // /api/predictions, which has never existed (every call 404'd). The real route
+  // is per agent and computes predictions on request from llm_events — there is
+  // no stored prediction, so no status filter and no fleet-wide listing.
   server.registerTool(
     'get_failure_predictions',
     {
       title: 'Get Failure Predictions',
       description:
-        'Get predictive failure analysis for your agents. ' +
-        'Shows upcoming risk of error rate breaches, latency degradation, ' +
-        'cost overruns, rate limit risks, and budget exhaustion. ' +
-        'Each prediction includes confidence level and recommended actions. ' +
+        'Predictive failure analysis for ONE agent, computed on request from its last 7 days of ' +
+        'calls against a 30-day baseline: error-rate breaches, latency degradation, cost overruns ' +
+        'and traffic anomalies, each with severity, confidence, trend and recommended actions. ' +
+        'Needs at least 20 calls in the last 7 days — below that it returns no predictions, which ' +
+        'means too little data, not a healthy agent. ' +
         'Do NOT use for current/past failures — use get_alerts for active issues.',
       inputSchema: {
-        agent_id: z.string().uuid().optional().describe('Filter predictions for a specific agent'),
+        agent_id: z.string().uuid().describe('Agent (UUID) to analyze'),
         severity: z
           .enum(['info', 'warning', 'critical'])
           .optional()
-          .describe('Filter by prediction severity'),
-        status: z
-          .enum(['active', 'acknowledged', 'resolved'])
-          .default('active')
-          .describe('Filter by prediction status (default: active)'),
+          .describe('Only show predictions of this severity'),
       },
       annotations: {
         readOnlyHint: true,
@@ -146,14 +153,10 @@ export function registerAlertTools(server: McpServer, client: MetrxApiClient): v
         openWorldHint: false,
       },
     },
-    async ({ agent_id, severity, status }) => {
-      const params: Record<string, string> = {
-        status: status ?? 'active',
-      };
-      if (agent_id) params.agent_id = agent_id;
-      if (severity) params.severity = severity;
-
-      const result = await client.get<{ predictions: FailurePrediction[] }>('/predictions', params);
+    async ({ agent_id, severity }) => {
+      const result = await client.get<AgentPredictionsResponse>(
+        `/agents/${agent_id}/optimization/predictions`
+      );
 
       if (result.error) {
         return {
@@ -162,8 +165,14 @@ export function registerAlertTools(server: McpServer, client: MetrxApiClient): v
         };
       }
 
-      const predictions = result.data?.predictions || [];
-      const text = formatPredictions(predictions);
+      const data = result.data;
+      const all = data?.predictions ?? [];
+      const predictions = severity ? all.filter((p) => p.severity === severity) : all;
+      const text = formatPredictions(predictions, {
+        agent_id: data?.agent_id ?? agent_id,
+        event_count: data?.event_count,
+        computed_at: data?.computed_at,
+      });
 
       return {
         content: [{ type: 'text', text }],

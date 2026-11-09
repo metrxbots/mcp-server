@@ -32,7 +32,7 @@ Tests are organized by component:
 src/__tests__/
 ├── api-client.test.ts          # MetrxApiClient initialization, HTTP methods
 ├── tools-dashboard.test.ts     # get_cost_summary, list_agents, get_agent_detail
-├── tools-optimization.test.ts  # get_optimization_recommendations, apply_optimization
+├── tools-optimization.test.ts  # get_optimization_recommendations
 ├── tools-budgets-alerts.test.ts # budgets, alerts, predictions
 ├── tools-experiments-leaks.test.ts # experiments, cost leak detector
 └── server-integration.test.ts  # Environment, initialization, integration
@@ -97,17 +97,15 @@ it('should filter agents by status', async () => {
 ---
 
 ### Optimization Tools Tests
-**File:** `src/__tests__/tools-optimization.test.ts` (23 tests)
+**File:** `src/__tests__/tools-optimization.test.ts`
 
-Tests two tools for cost optimization:
-- `get_optimization_recommendations` - AI suggestions (read-only)
-- `apply_optimization` - One-click fixes (write)
+Tests the cost optimization tool:
+- `get_optimization_recommendations` - suggestions (read-only; it changes nothing)
 
 Tests validate:
 - Fleet vs. agent-specific analysis routing
 - Revenue insight toggle
-- Custom payload handling
-- Write operation annotations
+- Read-only annotation
 
 **Example Test:**
 ```typescript

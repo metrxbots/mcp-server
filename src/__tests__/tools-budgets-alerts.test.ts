@@ -106,8 +106,8 @@ describe('get_budget_status Handler', () => {
           {
             id: 'budget_123',
             period: 'monthly',
-            limit_microcents: 10000000000,
-            spent_microcents: 8000000000,
+            limit_microcents: 100_000_000, // $100 — the column holds MICRO-DOLLARS (1e6)
+            spent_microcents: 80_000_000, // $80
             pct_used: 80,
           },
         ],
@@ -118,6 +118,7 @@ describe('get_budget_status Handler', () => {
 
     expect(result.content).toBeDefined();
     expect(result.content[0].type).toBe('text');
+    expect(result.content[0].text).toContain('$80.00 / $100.00');
   });
 
   it('should return error on API failure', async () => {
@@ -163,7 +164,7 @@ describe('set_budget Handler', () => {
     expect(mockClient.post).toHaveBeenCalledWith(
       '/budgets',
       expect.objectContaining({
-        limit_microcents: 100_000_000, // 100 * 1_000_000 (1 cent = 10,000 microcents)
+        limit_microcents: 100_000_000, // $100 in micro-dollars (round 8, N4: was 100x this)
       })
     );
   });
@@ -184,7 +185,7 @@ describe('set_budget Handler', () => {
     // Verify the structure contains the essential fields
     const callArgs = (mockClient.post as any).mock.calls[0][1];
     expect(callArgs.period).toBe('daily');
-    expect(callArgs.limit_microcents).toBe(50_000_000); // 50 * 1_000_000
+    expect(callArgs.limit_microcents).toBe(50_000_000);
   });
 
   it('should create agent-specific budget when agent_id provided', async () => {
@@ -246,6 +247,21 @@ describe('set_budget Handler', () => {
     );
   });
 
+  it('echoes the stored limit in dollars at the micro-dollar scale', async () => {
+    (mockClient.post as any).mockResolvedValueOnce({
+      data: {
+        id: 'budget_123',
+        period: 'monthly',
+        limit_microcents: 100_000_000,
+        enforcement_mode: 'alert_only',
+        warning_pct: 80,
+        agent_id: null,
+      },
+    });
+    const result = await setBudgetHandler({ period: 'monthly', limit_dollars: 100 });
+    expect(result.content[0].text).toContain('$100.00/monthly');
+  });
+
   it('should return success message', async () => {
     (mockClient.post as any).mockResolvedValueOnce({
       data: { id: 'budget_123', period: 'monthly' },
@@ -272,6 +288,134 @@ describe('set_budget Handler', () => {
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Error setting budget');
+  });
+});
+
+describe('update_budget_mode Handler — paused is not a PATCH field the route reads (round 8)', () => {
+  // PATCH /api/budgets/[id] strips unknown keys, so `paused` sent there was dropped
+  // and the tool still reported "status → active". Resume goes through the resume
+  // route (which refuses a hard_block still over its limit); pause through PATCH.
+  let mockClient: MetrxApiClient;
+  let handler: Function;
+  const ID = '123e4567-e89b-12d3-a456-426614174000';
+  beforeEach(() => {
+    const mockServer = createMockServer();
+    mockClient = createMockClient();
+    registerBudgetTools(mockServer as any, mockClient as any);
+    handler = (mockServer.registerTool as any).mock.calls.find(
+      ([n]: [string]) => n === 'update_budget_mode'
+    )[2];
+  });
+
+  it('paused:false calls POST /budgets/{id}/resume, never PATCH with paused', async () => {
+    (mockClient.post as any).mockResolvedValueOnce({ data: { id: ID, paused: false } });
+    const result = await handler({ budget_id: ID, paused: false });
+    expect(mockClient.post).toHaveBeenCalledWith(`/budgets/${ID}/resume`, {});
+    expect(mockClient.patch).not.toHaveBeenCalled();
+    expect(result.isError).toBeFalsy();
+    expect(result.content[0].text).toContain('status → active');
+  });
+
+  it('a refused resume (409 limit reached) is an error carrying the route message, not "status → active"', async () => {
+    (mockClient.post as any).mockResolvedValueOnce({
+      error: 'This budget is still at its limit for the current period',
+    });
+    const result = await handler({ budget_id: ID, paused: false });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain('still at its limit');
+    expect(result.content[0].text).not.toContain('status → active');
+  });
+
+  it('paused:true PATCHes { paused: true }', async () => {
+    (mockClient.patch as any).mockResolvedValueOnce({ data: { id: ID, paused: true } });
+    const result = await handler({ budget_id: ID, paused: true });
+    expect(mockClient.patch).toHaveBeenCalledWith(`/budgets/${ID}`, { paused: true });
+    expect(result.content[0].text).toContain('status → paused');
+  });
+
+  it('enforcement_mode + resume: PATCH the mode, then resume', async () => {
+    (mockClient.patch as any).mockResolvedValueOnce({ data: { id: ID } });
+    (mockClient.post as any).mockResolvedValueOnce({ data: { id: ID, paused: false } });
+    const result = await handler({ budget_id: ID, enforcement_mode: 'soft_block', paused: false });
+    expect(mockClient.patch).toHaveBeenCalledWith(`/budgets/${ID}`, {
+      enforcement_mode: 'soft_block',
+    });
+    expect(mockClient.post).toHaveBeenCalledWith(`/budgets/${ID}/resume`, {});
+    expect(result.content[0].text).toContain('enforcement → soft_block');
+    expect(result.content[0].text).toContain('status → active');
+  });
+});
+
+describe('budget writes need the admin scope (round 9 D5 → W1-4b)', () => {
+  // POST/PATCH /api/budgets and /resume call requireAdmin. Since W1-4b that admits
+  // an API key carrying the 'admin' scope; any other key gets 403 insufficient_scope,
+  // which the client renders as a sentence naming the scope. The tools must pass
+  // that sentence through and say how the caller can get the scope.
+  const ID = '123e4567-e89b-12d3-a456-426614174000';
+  const FORBIDDEN = {
+    error:
+      "Insufficient API key scope: this call needs 'admin' (key holds [read, write]). " +
+      'This action needs an API key with the admin scope.',
+    status: 403,
+  };
+  let mockServer: ReturnType<typeof createMockServer>;
+  let mockClient: MetrxApiClient;
+  const tool = (name: string) =>
+    (mockServer.registerTool as any).mock.calls.find(([n]: [string]) => n === name);
+  beforeEach(() => {
+    mockServer = createMockServer();
+    mockClient = createMockClient();
+    registerBudgetTools(mockServer as any, mockClient as any);
+  });
+
+  const expectAdminMessage = (text: string) => {
+    expect(text).toContain("needs 'admin'"); // the server's precise reason, verbatim
+    expect(text).toMatch(/'admin' scope/);
+    expect(text).toContain('Settings → Security → API Keys');
+    expect(text).toContain('https://app.metrxbot.com/settings/budgets');
+  };
+
+  it('set_budget: a 403 passes the scope reason through and says how to get the scope', async () => {
+    (mockClient.post as any).mockResolvedValueOnce(FORBIDDEN);
+    const result = await tool('set_budget')[2]({ period: 'monthly', limit_dollars: 10 });
+    expect(result.isError).toBe(true);
+    expectAdminMessage(result.content[0].text);
+  });
+
+  it('update_budget_mode: a 403 on the PATCH says the same', async () => {
+    (mockClient.patch as any).mockResolvedValueOnce(FORBIDDEN);
+    const result = await tool('update_budget_mode')[2]({
+      budget_id: ID,
+      enforcement_mode: 'hard_block',
+    });
+    expect(result.isError).toBe(true);
+    expectAdminMessage(result.content[0].text);
+  });
+
+  it('update_budget_mode: a 403 on resume says the same', async () => {
+    (mockClient.post as any).mockResolvedValueOnce(FORBIDDEN);
+    const result = await tool('update_budget_mode')[2]({ budget_id: ID, paused: false });
+    expect(result.isError).toBe(true);
+    expectAdminMessage(result.content[0].text);
+    expect(result.content[0].text).not.toContain('status → active');
+  });
+
+  it('a non-403 error keeps the route message (no scope copy)', async () => {
+    (mockClient.post as any).mockResolvedValueOnce({ error: 'Invalid period', status: 400 });
+    const result = await tool('set_budget')[2]({ period: 'monthly', limit_dollars: 10 });
+    expect(result.content[0].text).toContain('Invalid period');
+    expect(result.content[0].text).not.toMatch(/'admin' scope/);
+  });
+
+  it('the tool descriptions state the admin-scope requirement and no longer say API keys cannot write', () => {
+    const setDesc: string = tool('set_budget')[1].description;
+    const modeDesc: string = tool('update_budget_mode')[1].description;
+    expect(setDesc).toMatch(/'admin' scope/);
+    expect(modeDesc).toMatch(/'admin' scope/);
+    expect(setDesc).not.toMatch(/API key[^.]*cannot change budgets/i);
+    expect(modeDesc).not.toMatch(
+      /^Change the enforcement mode of an existing budget or pause\/resume it/
+    );
   });
 });
 
@@ -515,7 +659,8 @@ describe('acknowledge_alert Handler', () => {
   });
 });
 
-describe('get_failure_predictions Handler', () => {
+describe('get_failure_predictions Handler (GET /agents/{id}/optimization/predictions)', () => {
+  const AGENT = '123e4567-e89b-12d3-a456-426614174000';
   let mockServer: ReturnType<typeof createMockServer>;
   let mockClient: MetrxApiClient;
   let predictionsHandler: Function;
@@ -530,72 +675,68 @@ describe('get_failure_predictions Handler', () => {
     predictionsHandler = predCall[2];
   });
 
-  it('should fetch failure predictions', async () => {
-    (mockClient.get as any).mockResolvedValueOnce({
-      data: { predictions: [] },
-    });
-
-    await predictionsHandler({});
-
-    expect(mockClient.get).toHaveBeenCalledWith('/predictions', expect.any(Object));
+  const prediction = (severity: string) => ({
+    prediction_type: 'error_rate_breach',
+    severity,
+    confidence: 0.92,
+    prediction_horizon_hours: 24,
+    current_value: 0.08,
+    threshold_value: 0.1,
+    trend_direction: 'rising',
+    trend_velocity: 0.01,
+    contributing_factors: [
+      { factor: 'ewma_divergence', weight: 0.7, description: 'Fast EWMA above slow' },
+    ],
+    recommended_actions: [
+      {
+        action: 'investigate_errors',
+        impact: 'high',
+        effort: 'low',
+        description: 'Check recent errors',
+      },
+    ],
   });
 
-  it('should filter predictions by agent', async () => {
-    const agentId = '123e4567-e89b-12d3-a456-426614174000';
-    (mockClient.get as any).mockResolvedValueOnce({
-      data: { predictions: [] },
-    });
-
-    await predictionsHandler({ agent_id: agentId });
-
-    expect(mockClient.get).toHaveBeenCalledWith(
-      '/predictions',
-      expect.objectContaining({
-        agent_id: agentId,
-      })
-    );
+  it('requires agent_id (the route is per agent)', () => {
+    const schema = (mockServer.registerTool as any).mock.calls.find(
+      ([n]: [string]) => n === 'get_failure_predictions'
+    )[1].inputSchema;
+    expect(schema.agent_id.isOptional()).toBe(false);
+    expect(schema.status).toBeUndefined(); // computed on request — there is no stored status
   });
 
-  it('should return formatted predictions', async () => {
+  it('calls the per-agent predictions route, not the nonexistent /predictions', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({
+      data: { agent_id: AGENT, predictions: [], computed_at: 'now', event_count: 100 },
+    });
+    await predictionsHandler({ agent_id: AGENT });
+    expect(mockClient.get).toHaveBeenCalledWith(`/agents/${AGENT}/optimization/predictions`);
+  });
+
+  it('formats the route payload and filters by severity client-side', async () => {
     (mockClient.get as any).mockResolvedValueOnce({
       data: {
-        predictions: [
-          {
-            id: 'pred_123',
-            agent_id: 'agent_456',
-            prediction_type: 'budget_breach',
-            severity: 'high',
-            confidence: 0.92,
-            current_value: 500,
-            threshold_value: 1000,
-            trend_direction: 'up',
-            status: 'active',
-            recommended_actions: [
-              {
-                action: 'increase_budget',
-                impact: 'high',
-                description: 'Increase budget limit',
-              },
-            ],
-          },
-        ],
+        agent_id: AGENT,
+        predictions: [prediction('critical'), prediction('info')],
+        computed_at: '2026-10-08T00:00:00Z',
+        event_count: 500,
       },
     });
-
-    const result = await predictionsHandler({});
-
-    expect(result.content).toBeDefined();
-    expect(result.content[0].type).toBe('text');
+    const result = await predictionsHandler({ agent_id: AGENT, severity: 'critical' });
+    const text = result.content[0].text;
+    expect(text).toContain('Failure Predictions (1)');
+    expect(text).toContain('error_rate_breach');
+    expect(text).toContain('Calls analyzed (last 7 days): 500');
+    expect(text).toContain('investigate_errors');
   });
 
-  it('should handle no predictions', async () => {
+  it('says an empty result under 20 calls means too little data, not health', async () => {
     (mockClient.get as any).mockResolvedValueOnce({
-      data: { predictions: [] },
+      data: { agent_id: AGENT, predictions: [], computed_at: 'now', event_count: 5 },
     });
-
-    const result = await predictionsHandler({});
-
-    expect(result.content).toBeDefined();
+    const result = await predictionsHandler({ agent_id: AGENT });
+    expect(result.content[0].text).toContain('too little data');
+    expect(result.content[0].text).not.toMatch(/all agents are healthy/i);
   });
 
   it('should return error on failure', async () => {
@@ -603,7 +744,7 @@ describe('get_failure_predictions Handler', () => {
       error: 'API request failed (500)',
     });
 
-    const result = await predictionsHandler({});
+    const result = await predictionsHandler({ agent_id: AGENT });
 
     expect(result.isError).toBe(true);
     expect(result.content[0].text).toContain('Error');
@@ -650,5 +791,91 @@ describe('Input Validation', () => {
     const schema = setBudgetCall[1].inputSchema;
 
     expect(schema.enforcement_mode).toBeDefined();
+  });
+});
+
+describe('soft_block / hard_block are gateway-only and can be unavailable (PR #481)', () => {
+  // The server refuses soft_block/hard_block with 409 ENFORCEMENT_UNAVAILABLE while
+  // the gateway's Cloudflare budget-sync settings are unset. The client renders that
+  // body as "... (409 ENFORCEMENT_UNAVAILABLE): <reason>" (api-client.test.ts).
+  const ID = '123e4567-e89b-12d3-a456-426614174000';
+  const UNAVAILABLE = {
+    error:
+      'Budget enforcement unavailable (409 ENFORCEMENT_UNAVAILABLE): Gateway budget enforcement is not switched on for Metrx yet. Soft Block and Hard Block would not stop or flag any request, so they are unavailable; Alert Only works.',
+    status: 409,
+  };
+  let mockServer: ReturnType<typeof createMockServer>;
+  let mockClient: MetrxApiClient;
+  const tool = (name: string) =>
+    (mockServer.registerTool as any).mock.calls.find(([n]: [string]) => n === name);
+  beforeEach(() => {
+    mockServer = createMockServer();
+    mockClient = createMockClient();
+    registerBudgetTools(mockServer as any, mockClient as any);
+  });
+
+  const expectUnavailable = (result: any) => {
+    expect(result.isError).toBe(true);
+    const text: string = result.content[0].text;
+    expect(text).toContain('409 ENFORCEMENT_UNAVAILABLE');
+    expect(text).toMatch(/only on traffic through the Metrx gateway/);
+    expect(text).toMatch(/Cloudflare budget-sync settings are not configured/);
+    expect(text).toContain('Nothing was changed');
+    expect(text).toContain('"alert_only"');
+    expect(text).toContain('Soft Block and Hard Block would not stop'); // server reason kept
+    expect(text).not.toMatch(/'admin' scope/);
+    expect(text).not.toContain('✅');
+  };
+
+  it('set_budget with hard_block: the 409 says gateway-only, not configured, use alert_only', async () => {
+    (mockClient.post as any).mockResolvedValueOnce(UNAVAILABLE);
+    const result = await tool('set_budget')[2]({
+      period: 'monthly',
+      limit_dollars: 10,
+      enforcement_mode: 'hard_block',
+    });
+    expectUnavailable(result);
+  });
+
+  it('update_budget_mode to soft_block: same precise 409, and no "enforcement →" success line', async () => {
+    (mockClient.patch as any).mockResolvedValueOnce(UNAVAILABLE);
+    const result = await tool('update_budget_mode')[2]({
+      budget_id: ID,
+      enforcement_mode: 'soft_block',
+    });
+    expectUnavailable(result);
+    expect(result.content[0].text).not.toContain('enforcement → soft_block');
+  });
+
+  it('update_budget_mode resume refused for the same reason gets the same message', async () => {
+    (mockClient.post as any).mockResolvedValueOnce(UNAVAILABLE);
+    const result = await tool('update_budget_mode')[2]({ budget_id: ID, paused: false });
+    expectUnavailable(result);
+    expect(result.content[0].text).not.toContain('status → active');
+  });
+
+  it('a 409 "limit reached" on resume is NOT reported as enforcement-unavailable', async () => {
+    (mockClient.post as any).mockResolvedValueOnce({
+      error: 'API request failed (409): Budget is at its limit for this period',
+      status: 409,
+    });
+    const result = await tool('update_budget_mode')[2]({ budget_id: ID, paused: false });
+    expect(result.content[0].text).toContain('at its limit');
+    expect(result.content[0].text).not.toContain('ENFORCEMENT_UNAVAILABLE');
+  });
+
+  it('both descriptions and the enforcement_mode field say gateway-only and when it is unavailable', () => {
+    for (const name of ['set_budget', 'update_budget_mode']) {
+      const def = tool(name)[1];
+      const desc: string = def.description;
+      expect(desc, name).toMatch(/only on LLM calls routed through the Metrx gateway/);
+      expect(desc, name).toMatch(/SDK or OpenTelemetry are never blocked/);
+      expect(desc, name).toMatch(/gateway's Cloudflare settings for budget sync are unset/);
+      expect(desc, name).toContain('409 ENFORCEMENT_UNAVAILABLE');
+      expect(desc, name).not.toMatch(/strict enforcement/);
+      const modeField = def.inputSchema.enforcement_mode;
+      expect(modeField.description, name).toMatch(/gateway traffic only/);
+      expect(modeField.description, name).toContain('ENFORCEMENT_UNAVAILABLE');
+    }
   });
 });

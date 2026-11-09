@@ -8,6 +8,7 @@
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { MetrxApiClient } from '../services/api-client.js';
+import { formatMicrocents } from '../services/formatters.js';
 
 interface AttributionResponse {
   id: string;
@@ -20,22 +21,24 @@ interface AttributionResponse {
   created_at: string;
 }
 
-/**
- * Shape returned by GET /api/outcomes (agentledger apps/web/app/api/outcomes/route.ts).
- * The MCP `get_attribution_report` tool aggregates this flat list client-side.
- */
-interface OutcomesListResponse {
-  data: Array<{
-    id: string;
+interface AttributionReportResponse {
+  agent_id?: string;
+  period_days: number;
+  model: string;
+  total_outcomes: number;
+  total_value_cents: number;
+  outcomes: Array<{
     outcome_type: string;
-    occurred_at: string;
-    value_cents: number | null;
-    effective_value_cents: number | null;
-    source: string | null;
-    attribution_count: number | null;
-    agents: { id: string; name: string; agent_key: string; category: string } | null;
+    count: number;
+    value_cents: number;
+    confidence: number;
+    top_attributions: Array<{
+      agent_id: string;
+      agent_name: string;
+      contribution_value_cents: number;
+      confidence: number;
+    }>;
   }>;
-  meta: { count: number; days: number };
 }
 
 export function registerAttributionTools(server: McpServer, client: MetrxApiClient): void {
@@ -144,20 +147,14 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
           by_model: Record<string, number>;
           avg_per_request: number;
         };
-        // Attribution money is optional: a plan without full attribution may omit it, and
-        // roi_multiplier / weighted_avg_confidence are null when there is nothing to divide.
-        outcomes?: {
-          count?: number;
-          total_value_cents?: number;
-          by_type?: Record<string, number>;
+        outcomes: {
+          count: number;
+          total_value_cents: number;
+          by_type: Record<string, number>;
         };
-        /** Attributed revenue ÷ AI cost (a return multiple); null when either is 0. */
-        roi_multiplier?: number | null;
-        weighted_avg_confidence?: number | null;
+        roi_multiplier: number;
+        weighted_avg_confidence: number;
       }>(`/agents/${agent_id}/roi`, {
-        // Send both so we stay compatible with older backends (which only honor `days`)
-        // and the current backend (which honors start_date/end_date when present).
-        days: periodDays,
         start_date: startDate,
         end_date: endDate,
       });
@@ -170,10 +167,9 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       }
 
       const data = result.data!;
-      // 1 dollar = 1,000,000 microcents (1 cent = 10,000 microcents).
-      // Source of truth: apps/gateway/src/cost.ts.
-      const totalCostDollars = (data.costs.total_microcents / 1_000_000).toFixed(2);
-      // avg_per_request is in cents (see agentledger apps/web/lib/attribution/roi.ts).
+      // total_microcents / by_model are llm_events.cost_microcents sums: MICRO-DOLLARS.
+      const totalCostDollars = formatMicrocents(data.costs.total_microcents).slice(1);
+      const totalOutcomeDollars = (data.outcomes.total_value_cents / 100).toFixed(2);
       const avgCostDollars = (data.costs.avg_per_request / 100).toFixed(4);
 
       const lines: string[] = [
@@ -188,30 +184,14 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       if (modelEntries.length > 0) {
         lines.push('- By model:');
         for (const [model, microcents] of modelEntries) {
-          lines.push(`  - ${model}: $${((microcents as number) / 1_000_000).toFixed(2)}`);
+          lines.push(`  - ${model}: ${formatMicrocents(microcents as number)}`);
         }
       }
 
-      const outcomes = data.outcomes;
-      const revenueCents =
-        typeof outcomes?.total_value_cents === 'number' ? outcomes.total_value_cents : undefined;
-
-      if (revenueCents === undefined) {
-        // Absent = the plan does not include attributed revenue. Say so; never "$0.00".
-        lines.push('', '### Attributed Revenue', '- Not included in your plan.');
-        return {
-          content: [{ type: 'text', text: lines.join('\n') }],
-        };
-      }
-
-      const outcomeCount = typeof outcomes?.count === 'number' ? outcomes.count : 0;
-      lines.push(
-        '',
-        `### Attributed Revenue: $${(revenueCents / 100).toFixed(2)} (${outcomeCount} outcomes)`
-      );
+      lines.push('', `### Outcomes: $${totalOutcomeDollars} (${data.outcomes.count} total)`);
 
       // Outcome by type breakdown
-      const typeEntries = Object.entries(outcomes?.by_type ?? {});
+      const typeEntries = Object.entries(data.outcomes.by_type);
       if (typeEntries.length > 0) {
         lines.push('- By type:');
         for (const [type, cents] of typeEntries) {
@@ -219,37 +199,28 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
         }
       }
 
-      const multiple = typeof data.roi_multiplier === 'number' ? data.roi_multiplier : null;
-      lines.push('', '### Return');
+      lines.push('', '### ROI');
+      lines.push(`- **ROI Multiplier**: ${data.roi_multiplier.toFixed(2)}x`);
       lines.push(
-        `- **Attributed revenue multiple** (attributed revenue ÷ AI cost): ${
-          multiple === null ? 'n/a (no attributed revenue or no cost)' : `${multiple.toFixed(2)}x`
-        }`
-      );
-      lines.push(
-        `- **Avg Attribution Confidence**: ${
-          typeof data.weighted_avg_confidence === 'number'
-            ? `${(data.weighted_avg_confidence * 100).toFixed(0)}%`
-            : 'n/a (no attributed outcomes)'
-        }`
+        `- **Avg Attribution Confidence**: ${(data.weighted_avg_confidence * 100).toFixed(0)}%`
       );
 
-      if (multiple !== null && multiple >= 1) {
+      if (data.roi_multiplier >= 1) {
         lines.push(
           '',
-          `> ✅ This agent has $${multiple.toFixed(2)} of attributed revenue for every $1 of AI cost.`
+          `> ✅ This agent generates $${data.roi_multiplier.toFixed(
+            2
+          )} in value for every $1 spent.`
         );
-      } else if (multiple !== null && multiple > 0) {
+      } else if (data.roi_multiplier > 0) {
         lines.push(
           '',
-          `> ⚠️ This agent has ${(multiple * 100).toFixed(
+          `> ⚠️ This agent returns ${(data.roi_multiplier * 100).toFixed(
             0
-          )}¢ of attributed revenue per $1 of AI cost. Consider optimizing costs or improving outcome attribution.`
+          )}¢ per $1 spent. Consider optimizing costs or improving outcome attribution.`
         );
-      } else if (revenueCents > 0) {
-        lines.push('', `> 📊 No AI cost recorded in this window, so there is no multiple to show.`);
       } else {
-        lines.push('', `> 📊 No attributed revenue yet. Connect outcomes to start measuring return.`);
+        lines.push('', `> 📊 No attributed outcomes yet. Connect outcomes to start measuring ROI.`);
       }
 
       return {
@@ -281,13 +252,9 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
           .default(30)
           .describe('Number of days to include (default: 30)'),
         model: z
-          .enum(['direct', 'session_direct', 'first_touch', 'last_touch'])
+          .enum(['direct', 'last_touch', 'first_touch'])
           .default('direct')
-          .describe(
-            'Attribution model preference. Note: the current /api/outcomes endpoint returns ' +
-              'outcomes regardless of attribution method, so this is informational only. ' +
-              'Canonical enum source: agentledger apps/web/lib/attribution/types.ts.'
-          ),
+          .describe('Attribution model to use (default: direct)'),
       },
       annotations: {
         readOnlyHint: true,
@@ -297,9 +264,13 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       },
     },
     async ({ agent_id, days, model }) => {
-      const periodDays = days ?? 30;
-      // /api/outcomes only honors `days`; agent filtering and aggregation are done client-side.
-      const result = await client.get<OutcomesListResponse>('/outcomes', { days: periodDays });
+      const params: Record<string, string | number> = {
+        days: days ?? 30,
+        model: model ?? 'direct',
+      };
+      if (agent_id) params.agent_id = agent_id;
+
+      const result = await client.get<AttributionReportResponse>('/outcomes', params);
 
       if (result.error) {
         return {
@@ -308,84 +279,51 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
         };
       }
 
-      const raw = result.data?.data ?? [];
-      const filtered = agent_id ? raw.filter((o) => o.agents?.id === agent_id) : raw;
-
-      // Aggregate: per outcome_type → count, sum(value), per-agent contribution.
-      type AgentAgg = { agent_id: string; agent_name: string; contribution_value_cents: number };
-      type TypeAgg = {
-        outcome_type: string;
-        count: number;
-        value_cents: number;
-        agents: Map<string, AgentAgg>;
-      };
-      const byType = new Map<string, TypeAgg>();
-      let totalValueCents = 0;
-
-      for (const o of filtered) {
-        const value = o.effective_value_cents ?? o.value_cents ?? 0;
-        totalValueCents += value;
-        let agg = byType.get(o.outcome_type);
-        if (!agg) {
-          agg = { outcome_type: o.outcome_type, count: 0, value_cents: 0, agents: new Map() };
-          byType.set(o.outcome_type, agg);
-        }
-        agg.count += 1;
-        agg.value_cents += value;
-        if (o.agents) {
-          const existing = agg.agents.get(o.agents.id);
-          if (existing) {
-            existing.contribution_value_cents += value;
-          } else {
-            agg.agents.set(o.agents.id, {
-              agent_id: o.agents.id,
-              agent_name: o.agents.name,
-              contribution_value_cents: value,
-            });
-          }
-        }
-      }
-
+      const data = result.data!;
       const lines: string[] = [
         '## Attribution Report',
-        `### Period: Last ${periodDays} days | Model: ${model ?? 'direct'}`,
+        `### Period: Last ${data.period_days} days | Model: ${data.model}`,
         '',
       ];
 
-      if (agent_id) {
-        lines.push(`**Agent**: ${agent_id}`, '');
+      if (data.agent_id) {
+        lines.push(`**Agent**: ${data.agent_id}`, '');
       } else {
         lines.push('**Scope**: Fleet-wide (all agents)', '');
       }
 
-      lines.push(`**Total Outcomes**: ${filtered.length}`, '');
-      lines.push(`**Total Value**: $${(totalValueCents / 100).toFixed(2)}`, '');
+      lines.push(`**Total Outcomes**: ${data.total_outcomes}`, '');
+      const totalRevenue = (data.total_value_cents / 100).toFixed(2);
+      lines.push(`**Total Value**: $${totalRevenue}`, '');
 
-      if (byType.size === 0) {
+      if (data.outcomes.length === 0) {
         lines.push('No outcomes recorded in this period.');
-        return { content: [{ type: 'text', text: lines.join('\n') }] };
+        return {
+          content: [{ type: 'text', text: lines.join('\n') }],
+        };
       }
 
       lines.push('', '### Outcome Breakdown');
-      const sortedTypes = [...byType.values()].sort((a, b) => b.value_cents - a.value_cents);
-      for (const t of sortedTypes) {
-        lines.push('', `#### ${t.outcome_type}`);
-        lines.push(`- **Count**: ${t.count}`);
-        lines.push(`- **Total Value**: $${(t.value_cents / 100).toFixed(2)}`);
+      for (const outcome of data.outcomes) {
+        lines.push('', `#### ${outcome.outcome_type}`);
+        lines.push(`- **Count**: ${outcome.count}`);
+        const value = (outcome.value_cents / 100).toFixed(2);
+        lines.push(`- **Total Value**: $${value}`);
+        lines.push(`- **Confidence**: ${(outcome.confidence * 100).toFixed(0)}%`);
 
-        const topAgents = [...t.agents.values()]
-          .sort((a, b) => b.contribution_value_cents - a.contribution_value_cents)
-          .slice(0, 5);
-        if (topAgents.length > 0) {
+        if (outcome.top_attributions && outcome.top_attributions.length > 0) {
           lines.push('- **Top Agents**:');
-          for (const a of topAgents) {
-            const attrValue = (a.contribution_value_cents / 100).toFixed(2);
-            lines.push(`  - ${a.agent_name} [${a.agent_id}]: $${attrValue}`);
+          for (const attr of outcome.top_attributions) {
+            const attrValue = (attr.contribution_value_cents / 100).toFixed(2);
+            const attrConf = (attr.confidence * 100).toFixed(0);
+            lines.push(`  - ${attr.agent_name} [${attr.agent_id}]: $${attrValue} (${attrConf}%)`);
           }
         }
       }
 
-      return { content: [{ type: 'text', text: lines.join('\n') }] };
+      return {
+        content: [{ type: 'text', text: lines.join('\n') }],
+      };
     }
   );
 }

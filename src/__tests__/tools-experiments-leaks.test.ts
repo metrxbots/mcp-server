@@ -2,8 +2,8 @@
  * Experiments & Cost Leak Detector Tests
  *
  * Tests for:
- * - create_model_experiment (write operation, parameter defaults)
- * - get_experiment_results (filtering)
+ * - create_model_experiment / get_experiment_results / stop_experiment
+ *   (agent-scoped routes under /api/agents/{id}/experiments, W1-4b)
  * - run_cost_leak_scan (read-only, comprehensive scan)
  */
 
@@ -23,6 +23,18 @@ const createMockClient = () =>
     patch: vi.fn(),
   }) as unknown as MetrxApiClient;
 
+const AGENT = '11111111-1111-4111-8111-111111111111';
+const EXP = '22222222-2222-4222-8222-222222222222';
+
+function handlerFor(server: ReturnType<typeof createMockServer>, name: string): Function {
+  const call = (server.registerTool as any).mock.calls.find(([n]: [string]) => n === name);
+  return call[2];
+}
+function configFor(server: ReturnType<typeof createMockServer>, name: string): any {
+  const call = (server.registerTool as any).mock.calls.find(([n]: [string]) => n === name);
+  return call[1];
+}
+
 describe('Experiment Tools Registration', () => {
   let mockServer: ReturnType<typeof createMockServer>;
   let mockClient: MetrxApiClient;
@@ -30,367 +42,220 @@ describe('Experiment Tools Registration', () => {
   beforeEach(() => {
     mockServer = createMockServer();
     mockClient = createMockClient();
+    registerExperimentTools(mockServer as any, mockClient as any);
   });
 
-  it('should register create_model_experiment tool', () => {
-    registerExperimentTools(mockServer as any, mockClient as any);
-
-    expect(mockServer.registerTool).toHaveBeenCalledWith(
+  it('registers exactly the three experiment tools', () => {
+    const names = (mockServer.registerTool as any).mock.calls.map(([n]: [string]) => n);
+    expect(names.sort()).toEqual([
       'create_model_experiment',
-      expect.objectContaining({
-        title: 'Create Model Experiment',
-        description: expect.stringContaining('A/B test'),
-      }),
-      expect.any(Function)
-    );
-  });
-
-  it('should register get_experiment_results tool', () => {
-    registerExperimentTools(mockServer as any, mockClient as any);
-
-    expect(mockServer.registerTool).toHaveBeenCalledWith(
       'get_experiment_results',
-      expect.objectContaining({
-        title: 'Get Experiment Results',
-      }),
-      expect.any(Function)
+      'stop_experiment',
+    ]);
+  });
+
+  it('create_model_experiment says it records a draft and needs the admin scope', () => {
+    const cfg = configFor(mockServer, 'create_model_experiment');
+    expect(cfg.title).toBe('Create Model Experiment');
+    expect(cfg.description).toContain('DRAFT');
+    expect(cfg.description).toContain("'admin'");
+    expect(cfg.annotations.readOnlyHint).toBe(false);
+    expect(cfg.annotations.idempotentHint).toBe(false);
+  });
+
+  it('get_experiment_results is read-only and requires agent_id', () => {
+    const cfg = configFor(mockServer, 'get_experiment_results');
+    expect(cfg.annotations.readOnlyHint).toBe(true);
+    expect(cfg.inputSchema.agent_id.isOptional()).toBe(false);
+    expect(cfg.inputSchema.status.isOptional()).toBe(true);
+  });
+
+  it('create_model_experiment schema has no fields the route ignores', () => {
+    const schema = configFor(mockServer, 'create_model_experiment').inputSchema;
+    expect(Object.keys(schema).sort()).toEqual(
+      ['agent_id', 'control_model', 'description', 'name', 'traffic_pct', 'treatment_model'].sort()
     );
-  });
-
-  it('should register experiment tools', () => {
-    registerExperimentTools(mockServer as any, mockClient as any);
-
-    expect((mockServer.registerTool as any).mock.calls.length).toBeGreaterThanOrEqual(2);
-  });
-
-  it('create_model_experiment should be marked as non-idempotent', () => {
-    registerExperimentTools(mockServer as any, mockClient as any);
-
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const createCall = calls.find(([name]: [string]) => name === 'create_model_experiment');
-    const config = createCall[1];
-
-    expect(config.annotations?.idempotentHint).toBe(false);
-  });
-
-  it('create_model_experiment should be marked as write operation', () => {
-    registerExperimentTools(mockServer as any, mockClient as any);
-
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const createCall = calls.find(([name]: [string]) => name === 'create_model_experiment');
-    const config = createCall[1];
-
-    expect(config.annotations?.readOnlyHint).toBe(false);
+    expect(schema.traffic_pct.safeParse(51).success).toBe(false);
+    expect(schema.traffic_pct.safeParse(0).success).toBe(false);
+    expect(schema.traffic_pct.safeParse(50).success).toBe(true);
   });
 });
 
 describe('create_model_experiment Handler', () => {
   let mockServer: ReturnType<typeof createMockServer>;
   let mockClient: MetrxApiClient;
-  let createExpHandler: Function;
+  let handler: Function;
 
   beforeEach(() => {
     mockServer = createMockServer();
     mockClient = createMockClient();
     registerExperimentTools(mockServer as any, mockClient as any);
-
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const createCall = calls.find(([name]: [string]) => name === 'create_model_experiment');
-    createExpHandler = createCall[2];
+    handler = handlerFor(mockServer, 'create_model_experiment');
   });
 
-  it('should create experiment with required parameters', async () => {
+  it('posts to the agent-scoped experiments route with only the route fields', async () => {
     (mockClient.post as any).mockResolvedValueOnce({
       data: {
-        id: 'exp_123',
-        name: 'GPT-4 vs Claude Test',
-        agent_id: 'agent_456',
-        control_model: 'gpt-4',
-        treatment_model: 'claude-3-opus',
-      },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'GPT-4 vs Claude Test',
-      treatment_model: 'claude-3-opus',
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        agent_id: 'agent_456',
-        name: 'GPT-4 vs Claude Test',
-        treatment_model: 'claude-3-opus',
-      })
-    );
-  });
-
-  it('should apply default traffic_pct', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { id: 'exp_123' },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
+        id: EXP,
+        name: 'Haiku trial',
+        agent_id: AGENT,
+        control_model: 'gpt-4o',
+        treatment_model: 'claude-3-5-haiku',
         traffic_pct: 10,
-      })
-    );
-  });
-
-  it('should apply custom traffic_pct', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { id: 'exp_123' },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
-      traffic_pct: 25,
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        traffic_pct: 25,
-      })
-    );
-  });
-
-  it('should apply default primary_metric', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { id: 'exp_123' },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        primary_metric: 'cost_per_call',
-      })
-    );
-  });
-
-  it('should apply custom primary_metric', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { id: 'exp_123' },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
-      primary_metric: 'latency_p95',
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        primary_metric: 'latency_p95',
-      })
-    );
-  });
-
-  it('should apply default max_duration_days', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { id: 'exp_123' },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        max_duration_days: 14,
-      })
-    );
-  });
-
-  it('should apply custom max_duration_days', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { id: 'exp_123' },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
-      max_duration_days: 7,
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        max_duration_days: 7,
-      })
-    );
-  });
-
-  it('should apply auto_promote flag', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { id: 'exp_123' },
-    });
-
-    await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
-      auto_promote: true,
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        auto_promote: true,
-      })
-    );
-  });
-
-  it('should return success message', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: {
-        id: 'exp_123',
-        name: 'My Test Experiment',
-        agent_id: 'agent_456',
-        control_model: 'gpt-4',
-        treatment_model: 'claude-3-opus',
-        status: 'running',
+        status: 'draft',
       },
     });
-
-    const result = await createExpHandler({
-      agent_id: 'agent_456',
-      name: 'My Test Experiment',
-      treatment_model: 'claude-3-opus',
+    await handler({
+      agent_id: AGENT,
+      name: 'Haiku trial',
+      treatment_model: 'claude-3-5-haiku',
+      traffic_pct: 10,
     });
-
-    expect(result.content[0].text).toContain('✅');
-    expect(result.content[0].text).toContain('Experiment');
-    expect(result.content[0].text).toContain('created');
+    expect(mockClient.post).toHaveBeenCalledWith(`/agents/${AGENT}/experiments`, {
+      name: 'Haiku trial',
+      treatment_model: 'claude-3-5-haiku',
+      traffic_pct: 10,
+    });
   });
 
-  it('should return error on API failure', async () => {
+  it('passes control_model and description when given', async () => {
     (mockClient.post as any).mockResolvedValueOnce({
-      error: 'API request failed (400): Invalid agent',
+      data: { id: EXP, name: 'x', status: 'draft' },
     });
-
-    const result = await createExpHandler({
-      agent_id: 'invalid_agent',
-      name: 'Test',
-      treatment_model: 'gpt-4o-mini',
+    await handler({
+      agent_id: AGENT,
+      name: 'x',
+      treatment_model: 't',
+      traffic_pct: 20,
+      control_model: 'c',
+      description: 'd',
     });
+    expect(mockClient.post).toHaveBeenCalledWith(`/agents/${AGENT}/experiments`, {
+      name: 'x',
+      treatment_model: 't',
+      traffic_pct: 20,
+      control_model: 'c',
+      description: 'd',
+    });
+  });
 
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Error creating experiment');
+  it('reports the draft honestly', async () => {
+    (mockClient.post as any).mockResolvedValueOnce({
+      data: {
+        id: EXP,
+        name: 'Haiku trial',
+        control_model: 'gpt-4o',
+        treatment_model: 'claude-3-5-haiku',
+        traffic_pct: 10,
+        status: 'draft',
+      },
+    });
+    const res = await handler({
+      agent_id: AGENT,
+      name: 'Haiku trial',
+      treatment_model: 'claude-3-5-haiku',
+      traffic_pct: 10,
+    });
+    expect(res.isError).toBeUndefined();
+    expect(res.content[0].text).toContain('recorded as a draft');
+    expect(res.content[0].text).toContain('No traffic is routed');
+  });
+
+  it('returns an error on API failure', async () => {
+    (mockClient.post as any).mockResolvedValueOnce({
+      error: "Insufficient API key scope: this call needs 'admin'",
+    });
+    const res = await handler({
+      agent_id: AGENT,
+      name: 'x',
+      treatment_model: 't',
+      traffic_pct: 10,
+    });
+    expect(res.isError).toBe(true);
+    expect(res.content[0].text).toContain("needs 'admin'");
   });
 });
 
 describe('get_experiment_results Handler', () => {
   let mockServer: ReturnType<typeof createMockServer>;
   let mockClient: MetrxApiClient;
-  let resultsHandler: Function;
+  let handler: Function;
+  const rows = [
+    {
+      id: 'e1',
+      name: 'Running one',
+      agent_id: AGENT,
+      control_model: 'a',
+      treatment_model: 'b',
+      traffic_pct: 10,
+      status: 'running',
+      is_significant: false,
+      winner: null,
+    },
+    {
+      id: 'e2',
+      name: 'Done one',
+      agent_id: AGENT,
+      control_model: 'a',
+      treatment_model: 'c',
+      traffic_pct: 20,
+      status: 'completed',
+      is_significant: true,
+      p_value: 0.01,
+      winner: 'treatment',
+    },
+  ];
 
   beforeEach(() => {
     mockServer = createMockServer();
     mockClient = createMockClient();
     registerExperimentTools(mockServer as any, mockClient as any);
-
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const resultsCall = calls.find(([name]: [string]) => name === 'get_experiment_results');
-    resultsHandler = resultsCall[2];
+    handler = handlerFor(mockServer, 'get_experiment_results');
   });
 
-  it('should fetch all experiments when no filters', async () => {
-    (mockClient.get as any).mockResolvedValueOnce({
-      data: { experiments: [] },
-    });
-
-    await resultsHandler({});
-
-    expect(mockClient.get).toHaveBeenCalledWith('/experiments', expect.any(Object));
+  it('GETs the agent-scoped list route', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({ data: rows });
+    const res = await handler({ agent_id: AGENT });
+    expect(mockClient.get).toHaveBeenCalledWith(`/agents/${AGENT}/experiments`);
+    expect(res.content[0].text).toContain('Running one');
+    expect(res.content[0].text).toContain('Done one');
   });
 
-  it('should filter by agent_id', async () => {
-    (mockClient.get as any).mockResolvedValueOnce({
-      data: { experiments: [] },
-    });
-
-    await resultsHandler({
-      agent_id: 'agent_456',
-    });
-
-    expect(mockClient.get).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        agent_id: 'agent_456',
-      })
-    );
+  it('filters by status client-side (the route takes no filter)', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({ data: rows });
+    const res = await handler({ agent_id: AGENT, status: 'completed' });
+    expect(mockClient.get).toHaveBeenCalledWith(`/agents/${AGENT}/experiments`);
+    expect(res.content[0].text).toContain('Done one');
+    expect(res.content[0].text).not.toContain('Running one');
   });
 
-  it('should filter by status', async () => {
-    (mockClient.get as any).mockResolvedValueOnce({
-      data: { experiments: [] },
-    });
-
-    await resultsHandler({
-      status: 'running',
-    });
-
-    expect(mockClient.get).toHaveBeenCalledWith(
-      '/experiments',
-      expect.objectContaining({
-        status: 'running',
-      })
-    );
+  it('has a designed empty state', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({ data: [] });
+    const res = await handler({ agent_id: AGENT });
+    expect(res.content[0].text).toContain('No experiments for this agent');
   });
 
-  it('should return formatted experiment results', async () => {
-    (mockClient.get as any).mockResolvedValueOnce({
-      data: {
-        experiments: [
-          {
-            id: 'exp_123',
-            name: 'Test Exp',
-            status: 'running',
-            control_samples: 100,
-            treatment_samples: 100,
-            is_significant: false,
-          },
-        ],
-      },
-    });
-
-    const result = await resultsHandler({});
-
-    expect(result.content).toBeDefined();
-    expect(result.content[0].type).toBe('text');
+  it('returns an error on API failure', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({ error: 'API Error' });
+    const res = await handler({ agent_id: AGENT });
+    expect(res.isError).toBe(true);
   });
+});
 
-  it('should return error on API failure', async () => {
-    (mockClient.get as any).mockResolvedValueOnce({
-      error: 'API request failed (500)',
+describe('stop_experiment Handler', () => {
+  it('PATCHes the experiment to completed', async () => {
+    const mockServer = createMockServer();
+    const mockClient = createMockClient();
+    registerExperimentTools(mockServer as any, mockClient as any);
+    const handler = handlerFor(mockServer, 'stop_experiment');
+    (mockClient.patch as any).mockResolvedValueOnce({
+      data: { id: EXP, name: 'Haiku trial', status: 'completed' },
     });
-
-    const result = await resultsHandler({});
-
-    expect(result.isError).toBe(true);
+    const res = await handler({ agent_id: AGENT, experiment_id: EXP });
+    expect(mockClient.patch).toHaveBeenCalledWith(`/agents/${AGENT}/experiments/${EXP}`, {
+      status: 'completed',
+    });
+    expect(res.content[0].text).toContain('stopped');
   });
 });
 
@@ -593,41 +458,6 @@ describe('run_cost_leak_scan Handler', () => {
   });
 });
 
-describe('Input Validation', () => {
-  let mockServer: ReturnType<typeof createMockServer>;
-  let mockClient: MetrxApiClient;
-
-  beforeEach(() => {
-    mockServer = createMockServer();
-    mockClient = createMockClient();
-    registerExperimentTools(mockServer as any, mockClient as any);
-  });
-
-  it('create_model_experiment should validate traffic_pct range', () => {
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const createCall = calls.find(([name]: [string]) => name === 'create_model_experiment');
-    const schema = createCall[1].inputSchema;
-
-    expect(schema.traffic_pct).toBeDefined();
-  });
-
-  it('create_model_experiment should validate primary_metric enum', () => {
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const createCall = calls.find(([name]: [string]) => name === 'create_model_experiment');
-    const schema = createCall[1].inputSchema;
-
-    expect(schema.primary_metric).toBeDefined();
-  });
-
-  it('create_model_experiment should validate max_duration_days range', () => {
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const createCall = calls.find(([name]: [string]) => name === 'create_model_experiment');
-    const schema = createCall[1].inputSchema;
-
-    expect(schema.max_duration_days).toBeDefined();
-  });
-});
-
 // ── Model Pricing Data (Issue #2) ──────────────────────────────────────────────
 
 import {
@@ -645,22 +475,24 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     expect(MODEL_PRICING['mistral-large'].input_cost_per_1m).toBeGreaterThan(0);
   });
 
-  it('should include mistral-medium in MODEL_PRICING', () => {
-    expect(MODEL_PRICING['mistral-medium']).toBeDefined();
-    expect(MODEL_PRICING['mistral-medium'].provider).toBe('mistral');
-    expect(MODEL_PRICING['mistral-medium'].tier).toBe('balanced');
+  it('should resolve mistral-medium as alias to mistral-large', () => {
+    const entry = getModelPricing('mistral-medium');
+    expect(entry).toBeDefined();
+    expect(entry!.model).toBe('mistral-large');
+    expect(entry!.provider).toBe('mistral');
   });
 
-  it('should include mistral-small in MODEL_PRICING', () => {
-    expect(MODEL_PRICING['mistral-small']).toBeDefined();
-    expect(MODEL_PRICING['mistral-small'].provider).toBe('mistral');
-    expect(MODEL_PRICING['mistral-small'].tier).toBe('efficient');
+  it('should include mistral-small-3.1 in MODEL_PRICING', () => {
+    expect(MODEL_PRICING['mistral-small-3.1']).toBeDefined();
+    expect(MODEL_PRICING['mistral-small-3.1'].provider).toBe('mistral');
+    expect(MODEL_PRICING['mistral-small-3.1'].tier).toBe('efficient');
   });
 
-  it('should include codestral in MODEL_PRICING', () => {
-    expect(MODEL_PRICING['codestral']).toBeDefined();
-    expect(MODEL_PRICING['codestral'].provider).toBe('mistral');
-    expect(MODEL_PRICING['codestral'].tier).toBe('efficient');
+  it('should resolve codestral as alias to mistral-small-3.1', () => {
+    const entry = getModelPricing('codestral');
+    expect(entry).toBeDefined();
+    expect(entry!.model).toBe('mistral-small-3.1');
+    expect(entry!.provider).toBe('mistral');
   });
 
   it('should include command-r-plus in MODEL_PRICING', () => {
@@ -675,12 +507,11 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     expect(MODEL_PRICING['command-r'].tier).toBe('balanced');
   });
 
-  it('should include embed-english-v3 with zero output cost (embedding-only)', () => {
-    const entry = MODEL_PRICING['embed-english-v3'];
+  it('should resolve embed-english-v3 alias to command-r', () => {
+    const entry = getModelPricing('embed-english-v3');
     expect(entry).toBeDefined();
-    expect(entry.provider).toBe('cohere');
-    expect(entry.output_cost_per_1m).toBe(0);
-    expect(entry.context_window).toBe(512);
+    expect(entry!.model).toBe('command-r');
+    expect(entry!.provider).toBe('cohere');
   });
 
   it('getModelPricing should resolve mistral-large-latest alias', () => {
@@ -693,13 +524,13 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
   it('getModelPricing should resolve mistral-small-latest alias', () => {
     const entry = getModelPricing('mistral-small-latest');
     expect(entry).toBeDefined();
-    expect(entry!.model).toBe('mistral-small');
+    expect(entry!.model).toBe('mistral-small-3.1');
   });
 
   it('getModelPricing should resolve codestral-latest alias', () => {
     const entry = getModelPricing('codestral-latest');
     expect(entry).toBeDefined();
-    expect(entry!.model).toBe('codestral');
+    expect(entry!.model).toBe('mistral-small-3.1');
   });
 
   it('getModelPricing should resolve command-r-plus-08-2024 alias', () => {
@@ -711,7 +542,7 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
   it('getModelPricing should resolve embed-english-v3.0 alias', () => {
     const entry = getModelPricing('embed-english-v3.0');
     expect(entry).toBeDefined();
-    expect(entry!.model).toBe('embed-english-v3');
+    expect(entry!.model).toBe('command-r');
   });
 
   it('getModelPricing should return undefined for unknown model', () => {
@@ -722,9 +553,7 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     const models = getModelsByProvider('mistral');
     const names = models.map((m) => m.model);
     expect(names).toContain('mistral-large');
-    expect(names).toContain('mistral-medium');
-    expect(names).toContain('mistral-small');
-    expect(names).toContain('codestral');
+    expect(names).toContain('mistral-small-3.1');
   });
 
   it('getModelsByProvider should return all cohere models', () => {
@@ -732,7 +561,6 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     const names = models.map((m) => m.model);
     expect(names).toContain('command-r-plus');
     expect(names).toContain('command-r');
-    expect(names).toContain('embed-english-v3');
   });
 
   it('getCoveredProviders should include mistral and cohere', () => {
@@ -747,13 +575,17 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     expect(providers).toEqual(sorted);
   });
 
-  it('getCoveredProviders should include all 5 expected providers', () => {
+  it('getCoveredProviders should include all 9 expected providers', () => {
     const providers = getCoveredProviders();
     expect(providers).toContain('openai');
     expect(providers).toContain('anthropic');
     expect(providers).toContain('google');
     expect(providers).toContain('mistral');
     expect(providers).toContain('cohere');
+    expect(providers).toContain('xai');
+    expect(providers).toContain('meta');
+    expect(providers).toContain('deepseek');
+    expect(providers).toContain('amazon');
   });
 });
 

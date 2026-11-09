@@ -12,7 +12,7 @@
  *
  * Environment variables:
  *   METRX_API_KEY  — Required. Your Metrx API key.
- *   METRX_API_URL  — Optional. Override the API base URL (default: https://metrxbot.com/api/v1).
+ *   METRX_API_URL  — Optional. Override the API base URL (default: https://app.metrxbot.com/api).
  *
  * Usage:
  *   METRX_API_KEY=sk_metrx_xxx npx metrx-mcp
@@ -27,86 +27,121 @@
  *       }
  *     }
  *   }
+ *
+ * Flags:
+ *   --demo          The public desk tools over the Northwind sample (no API key needed)
+ *   --auth          Interactive login (opens browser, saves key)
+ *   --test          Verify API key & connection
+ *   --setup-claude  Auto-configure Claude Desktop, Cursor, or VS Code
  */
 
+import { liftDeskErrorsOn } from './errors.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { SERVER_VERSION } from './constants.js';
+import { mcpToolSummary } from './tool-registry-facts.js';
 import { MetrxApiClient } from './services/api-client.js';
-import { DemoApiClient } from './services/demo-client.js';
+import { HttpKeylessClient } from './services/keyless-client.js';
 import { createMcpServer } from './server-factory.js';
 import { loadApiKey, runAuthFlow } from './services/auth.js';
+import { trackCliEvent } from './services/telemetry.js';
+import { runSetupClaude } from './services/setup-claude.js';
 
-// ── --demo flag: run with mock data, no API key required ──
-// Lets users try all 23 tools instantly without signing up.
-if (process.argv.includes('--demo')) {
+// ── ANSI colors (stderr-safe) ──
+
+const RESET = '\x1b[0m';
+const BOLD = '\x1b[1m';
+const GREEN = '\x1b[32m';
+const RED = '\x1b[31m';
+const CYAN = '\x1b[36m';
+const DIM = '\x1b[2m';
+
+// ── CLI flag routing ──
+
+if (process.argv.includes('--setup-claude')) {
+  // ── --setup-claude flag: auto-configure IDE MCP config ──
+  runSetupClaude().catch((err) => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+} else if (process.argv.includes('--demo')) {
+  // ── --demo flag: the public desk tools over the live Northwind sample, no key ──
   runDemoServer().catch((err) => {
     console.error('Fatal error:', err);
     process.exit(1);
   });
 } else if (process.argv.includes('--auth')) {
-// ── --auth flag: interactive CLI login flow ──
-// Opens browser, prompts for API key, validates, saves to ~/.metrxrc.
+  // ── --auth flag: interactive CLI login flow ──
+  // Opens browser, prompts for API key, validates, saves to ~/.metrxrc.
   runAuthFlow().catch((err) => {
     console.error('Fatal error:', err);
     process.exit(1);
   });
 } else if (process.argv.includes('--test')) {
-// ── --test flag: verify API key before stdio transport takes over ──
-// Must run before anything touches stdin/stdout.
+  // ── --test flag: verify API key before stdio transport takes over ──
+  // Must run before anything touches stdin/stdout.
   (async () => {
-    const RESET = '\x1b[0m';
-    const BOLD = '\x1b[1m';
-    const GREEN = '\x1b[32m';
-    const RED = '\x1b[31m';
-    const CYAN = '\x1b[36m';
-    const DIM = '\x1b[2m';
+    trackCliEvent('mcp_test_run');
 
-    console.log(`\n${CYAN}${BOLD}Metrx MCP Server — Connection Test${RESET}\n`);
-    console.log(`  Version: ${SERVER_VERSION}`);
+    console.error(`\n${CYAN}${BOLD}Metrx MCP Server — Connection Test${RESET}\n`);
+    console.error(`  Version: ${SERVER_VERSION}`);
 
     // Check API key — env var or ~/.metrxrc
     const apiKey = loadApiKey();
     if (!apiKey) {
-      console.log(`\n  ${RED}✗ No API key found${RESET}`);
-      console.log(`\n  ${DIM}Run ${BOLD}npx @metrxbot/mcp-server --auth${RESET}${DIM} to log in, or set METRX_API_KEY.${RESET}`);
-      console.log(`\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up?source=mcp${RESET}`);
-      console.log(`  Manage keys:   ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
+      console.error(`\n  ${RED}✗ No API key found${RESET}`);
+      console.error(
+        `\n  ${DIM}Run ${BOLD}npx @metrxbot/mcp-server --auth${RESET}${DIM} to log in, or set METRX_API_KEY.${RESET}`
+      );
+      console.error(
+        `\n  Sign up free:  ${CYAN}https://app.metrxbot.com/sign-up?source=mcp${RESET}`
+      );
+      console.error(`  Manage keys:   ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
       process.exit(1);
     }
 
     // Validate key format
-    if (!apiKey.startsWith('sk_live_') && !apiKey.startsWith('sk_test_') && !apiKey.startsWith('mk_')) {
-      console.log(`  ${RED}✗ API key format looks wrong${RESET} (expected sk_live_…, sk_test_…, or mk_…)`);
-      console.log(`\n  Get a valid key at: ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`);
+    if (
+      !apiKey.startsWith('sk_live_') &&
+      !apiKey.startsWith('sk_test_') &&
+      !apiKey.startsWith('mk_')
+    ) {
+      console.error(
+        `  ${RED}✗ API key format looks wrong${RESET} (expected sk_live_…, sk_test_…, or mk_…)`
+      );
+      console.error(
+        `\n  Get a valid key at: ${CYAN}https://app.metrxbot.com/settings/security${RESET}\n`
+      );
       process.exit(1);
     }
-    console.log(`  API Key: ${DIM}${apiKey.slice(0, 12)}…${apiKey.slice(-4)}${RESET}`);
+    // Mask API key — only show prefix and last 4 chars
+    const maskedKey = `${apiKey.slice(0, 8)}${'*'.repeat(Math.max(0, apiKey.length - 12))}${apiKey.slice(-4)}`;
+    console.error(`  API Key: ${DIM}${maskedKey}${RESET}`);
 
     // Attempt API ping
-    console.log(`\n  Connecting to Metrx API…`);
+    console.error(`\n  Connecting to Metrx API…`);
     try {
       const client = new MetrxApiClient();
       const result = await client.ping();
 
       if (result.ok) {
-        console.log(`  ${GREEN}${BOLD}✓ Connection successful!${RESET}`);
-        console.log(`\n  Your MCP server is ready to use. Add this to your MCP client config:`);
-        console.log(`\n  ${DIM}{`);
-        console.log(`    "mcpServers": {`);
-        console.log(`      "metrx": {`);
-        console.log(`        "command": "npx",`);
-        console.log(`        "args": ["@metrxbot/mcp-server"],`);
-        console.log(`        "env": { "METRX_API_KEY": "${apiKey}" }`);
-        console.log(`      }`);
-        console.log(`    }`);
-        console.log(`  }${RESET}\n`);
+        console.error(`  ${GREEN}${BOLD}✓ Connection successful!${RESET}`);
+        console.error(`\n  Your MCP server is ready to use. Add this to your MCP client config:`);
+        console.error(`\n  ${DIM}{`);
+        console.error(`    "mcpServers": {`);
+        console.error(`      "metrx": {`);
+        console.error(`        "command": "npx",`);
+        console.error(`        "args": ["@metrxbot/mcp-server"],`);
+        console.error(`        "env": { "METRX_API_KEY": "sk_live_***" }`);
+        console.error(`      }`);
+        console.error(`    }`);
+        console.error(`  }${RESET}\n`);
         process.exit(0);
       } else {
-        console.log(`  ${RED}✗ Connection failed: ${result.error}${RESET}\n`);
+        console.error(`  ${RED}✗ Connection failed: ${result.error}${RESET}\n`);
         process.exit(1);
       }
     } catch (err) {
-      console.log(`  ${RED}✗ ${err instanceof Error ? err.message : String(err)}${RESET}\n`);
+      console.error(`  ${RED}✗ ${err instanceof Error ? err.message : String(err)}${RESET}\n`);
       process.exit(1);
     }
   })();
@@ -119,6 +154,8 @@ if (process.argv.includes('--demo')) {
 }
 
 async function runServer(): Promise<void> {
+  trackCliEvent('mcp_bare_run');
+
   // Resolve API key: METRX_API_KEY env var > ~/.metrxrc > error
   const resolvedKey = loadApiKey();
 
@@ -147,7 +184,8 @@ async function runServer(): Promise<void> {
   // Single code path: createMcpServer handles tools, prompts, rate limiting, namespace prefix
   const server = createMcpServer(apiClient);
 
-  const transport = new StdioServerTransport();
+  // Desk tool errors leave as the table's JSON-RPC errors (plan §2), as on the hosted route.
+  const transport = liftDeskErrorsOn(new StdioServerTransport());
   await server.connect(transport);
 
   process.on('SIGINT', async () => {
@@ -162,38 +200,45 @@ async function runServer(): Promise<void> {
 }
 
 /**
- * Fire-and-forget telemetry ping for --demo mode.
- * Lets us count how many npm installs are running demo vs. signing up.
- * Never throws — MCP server startup must not be blocked by this.
- */
-async function pingDemoTelemetry(): Promise<void> {
-  try {
-    await fetch('https://metrxbot.com/api/telemetry/demo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        version: SERVER_VERSION,
-        platform: process.platform,
-      }),
-      signal: AbortSignal.timeout(3000), // 3s max — never block startup
-    });
-  } catch {
-    // Swallow all errors — telemetry must never affect the demo experience
-  }
-}
-
-/**
- * Start the MCP server in demo mode with mock data.
- * No API key required — uses DemoApiClient with embedded fixtures.
+ * Start the MCP server in demo mode: no API key. Only the public desk tools
+ * are listed (MCP_TOOL_AUTH 'public'); they read the live Northwind sample
+ * review and run the pure drafting/checking functions over the SAME api/v1
+ * routes the hosted endpoint uses (HttpKeylessClient), so what a `--demo`
+ * caller sees is what https://metrxbot.com/review/demo shows. Each call is
+ * rate-limited once, at the route (30/min/IP).
  */
 async function runDemoServer(): Promise<void> {
-  // Track demo usage anonymously so we can measure npm → signup conversion gap
-  void pingDemoTelemetry();
+  trackCliEvent('mcp_demo_started');
 
-  const demoClient = new DemoApiClient();
-  const server = createMcpServer(demoClient, { isDemo: true });
+  // ── Terminal banner (stderr so it doesn't interfere with stdio protocol) ──
+  console.error(
+    `\n${CYAN}${BOLD}  Metrx MCP Server — Demo Mode${RESET}  ${DIM}v${SERVER_VERSION}${RESET}\n`
+  );
+  console.error(
+    `  ${GREEN}✓${RESET} No API key needed: the public desk tools over the Northwind sample\n`
+  );
+  console.error(`  ${BOLD}What you can call${RESET}`);
+  console.error(
+    `  ${DIM}metrx_get_workforce_review${RESET}  the weekly review of a sample company's AI agents`
+  );
+  console.error(`  ${DIM}metrx_draft_job_contract${RESET}    draft a job contract from a template`);
+  console.error(
+    `  ${DIM}metrx_check_vendor_bill${RESET}     reconcile a per-resolution vendor bill\n`
+  );
+  console.error(`  ${DIM}The full registry (${mcpToolSummary()}) needs an API key:${RESET}`);
+  console.error(`  ${DIM}$ npx @metrxbot/mcp-server --auth${RESET}\n`);
+  console.error(`  ${DIM}If running directly in a terminal, you'll see JSON-RPC messages.`);
+  console.error(`  For the best experience, configure your MCP client:${RESET}`);
+  console.error(`  ${DIM}$ npx @metrxbot/mcp-server --setup-claude${RESET}\n`);
+  console.error(`  ${GREEN}Ready to review your own agents?${RESET}`);
+  console.error(`  ${CYAN}https://app.metrxbot.com/sign-up?source=mcp-demo${RESET}\n`);
 
-  const transport = new StdioServerTransport();
+  // ── Start server ──
+  const keyless = new HttpKeylessClient(process.env.METRX_API_URL || undefined);
+  const server = createMcpServer(keyless, { isDemo: true, authMode: 'public' });
+
+  // Desk tool errors leave as the table's JSON-RPC errors (plan §2), as on the hosted route.
+  const transport = liftDeskErrorsOn(new StdioServerTransport());
   await server.connect(transport);
 
   process.on('SIGINT', async () => {
@@ -208,4 +253,5 @@ async function runDemoServer(): Promise<void> {
 }
 
 // Note: runServer()/runDemoServer() is called conditionally above.
-// --demo → runDemoServer(), --test → IIFE that exits, otherwise → runServer().
+// --setup-claude → runSetupClaude(), --demo → runDemoServer(), --auth → runAuthFlow(),
+// --test → IIFE that exits, otherwise → runServer().

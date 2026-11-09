@@ -1,0 +1,15 @@
+{
+  "name": "metrx-desk",
+  "version": "0.1.0",
+  "description": "Manage the AI agents your company employs as a line manager would: a workforce review with labelled numbers, job contracts, a vendor bill check, and the weekly decision queue. The sample review needs no account.",
+  "author": {
+    "name": "Metrx",
+    "url": "https://metrxbot.com"
+  },
+  "homepage": "https://docs.metrxbot.com/desk",
+  "repository": "https://github.com/metrxbots/mcp-server",
+  "license": "MIT",
+  "keywords": ["ai-agents", "workforce", "cost", "job-contract", "mcp", "metrx"],
+  "skills": "./skills",
+  "mcpServers": "./.mcp.json"
+}

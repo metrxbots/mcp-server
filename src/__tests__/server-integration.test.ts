@@ -9,7 +9,23 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { MetrxApiClient } from '../../dist/services/api-client';
+
+/**
+ * The package version, read from package.json rather than typed as a literal.
+ *
+ * NOTE: this suite imports from ../../dist — the BUILT output — so it can pass
+ * against a stale build and fail against a fresh one. That is exactly what
+ * happened here: a hardcoded '0.2.2' assertion appeared green while dist still
+ * held the old build, and only went red once dist caught up. Deriving the
+ * expected value removes the literal; the dist-vs-src staleness remains a
+ * property of this suite worth knowing about.
+ */
+const PKG_VERSION: string = JSON.parse(
+  readFileSync(join(__dirname, '../../package.json'), 'utf-8')
+).version;
 
 describe('MCP Server Integration', () => {
   beforeEach(() => {
@@ -37,7 +53,7 @@ describe('MCP Server Integration', () => {
     it('should use default API URL', () => {
       process.env.METRX_API_KEY = 'sk_test';
       const client = new MetrxApiClient();
-      expect(client['baseUrl']).toBe('https://metrxbot.com/api/v1');
+      expect(client['baseUrl']).toBe('https://app.metrxbot.com/api');
     });
 
     it('should accept custom API URL via environment', () => {
@@ -147,7 +163,7 @@ describe('MCP Server Integration', () => {
         expect.any(String),
         expect.objectContaining({
           headers: expect.objectContaining({
-            'X-MCP-Client': 'metrx-mcp-server/0.2.7',
+            'X-MCP-Client': `metrx-mcp-server/${PKG_VERSION}`,
           }),
         })
       );
@@ -203,7 +219,7 @@ describe('MCP Server Integration', () => {
       const result = await noRetryClient.get('/agents');
 
       expect(result.error).toBeDefined();
-      expect(result.error).toContain('500');
+      expect(result.error).toContain('Server error (500)');
     });
 
     it('should handle network timeouts', async () => {
@@ -397,7 +413,10 @@ describe('MCP Server Integration', () => {
       const constants = await import('../../dist/constants');
 
       expect(constants.SERVER_NAME).toBe('metrx-mcp-server');
-      expect(constants.SERVER_VERSION).toBe('0.2.7');
+      // Derived, never a literal. This assertion hardcoded '0.2.2' and silently
+      // pinned the server to a version the package had already moved past — the
+      // same drift class this suite exists to catch, one file over.
+      expect(constants.SERVER_VERSION).toBe(PKG_VERSION);
     });
 
     it('should define default API URL', async () => {
@@ -412,5 +431,119 @@ describe('MCP Server Integration', () => {
       expect(constants.DEFAULT_PAGE_LIMIT).toBeDefined();
       expect(constants.MAX_TEXT_LENGTH).toBeDefined();
     });
+  });
+});
+
+// ── W1-4b: every registered tool declares its API-key scope ──────────────────
+
+import { createMcpServer } from '../../dist/server-factory';
+import {
+  MCP_TOOL_COUNT,
+  MCP_TOOL_SCOPES,
+  MCP_TOOL_AUTH,
+  MCP_PUBLIC_MODE_TOOL_NAMES,
+  PUBLIC_TOOL_COUNT,
+  WORKFORCE_TOOL_SET,
+  mcpScopeSentence,
+} from '../../dist/tool-registry-facts';
+
+describe('Tool scopes (W1-4b)', () => {
+  const fakeClient = {
+    get: vi.fn(async () => ({ data: {} })),
+    post: vi.fn(async () => ({ data: {} })),
+    patch: vi.fn(async () => ({ data: {} })),
+  };
+
+  it('every registered tool carries its scope and auth mode in _meta; key tools state the scope', () => {
+    const server = createMcpServer(fakeClient as any);
+    const registered = (server as any)._registeredTools as Record<string, any>;
+    const names = Object.keys(registered);
+    expect(names).toHaveLength(MCP_TOOL_COUNT);
+    expect(Object.keys(MCP_TOOL_SCOPES)).toHaveLength(MCP_TOOL_COUNT);
+    expect(Object.keys(MCP_TOOL_AUTH)).toHaveLength(MCP_TOOL_COUNT);
+    for (const name of names) {
+      const bare = name.replace(/^metrx_/, '');
+      const scope = (MCP_TOOL_SCOPES as Record<string, string>)[bare];
+      const auth = (MCP_TOOL_AUTH as Record<string, string>)[bare];
+      expect(scope, name).toBeDefined();
+      expect(auth, name).toBeDefined();
+      expect(registered[name]._meta?.['metrx/required_scope'], name).toBe(scope);
+      expect(registered[name]._meta?.['metrx/auth_mode'], name).toBe(auth);
+      // Desk PR 1: a public tool needs no key, so its description does not
+      // tell the caller to get one; every key tool still states its scope.
+      if (auth === 'public') {
+        expect(registered[name].description, name).not.toContain(mcpScopeSentence(scope as any));
+      } else {
+        expect(registered[name].description, name).toContain(mcpScopeSentence(scope as any));
+      }
+    }
+  });
+
+  it('public mode registers only the public tools (desk PR 1)', () => {
+    const server = createMcpServer(fakeClient as any, { authMode: 'public' });
+    const names = Object.keys((server as any)._registeredTools as Record<string, any>).sort();
+    expect(names).toHaveLength(PUBLIC_TOOL_COUNT);
+    expect(names).toEqual(MCP_PUBLIC_MODE_TOOL_NAMES.map((n) => `metrx_${n}`).sort());
+  });
+
+  it('the workforce tool set narrows the list in key mode and intersects it in public mode', () => {
+    const keyed = createMcpServer(fakeClient as any, { toolSet: 'workforce' });
+    const keyedNames = Object.keys((keyed as any)._registeredTools as Record<string, any>).sort();
+    expect(keyedNames).toEqual([...WORKFORCE_TOOL_SET].map((n) => `metrx_${n}`).sort());
+    const pub = createMcpServer(fakeClient as any, { authMode: 'public', toolSet: 'workforce' });
+    const pubNames = Object.keys((pub as any)._registeredTools as Record<string, any>).sort();
+    expect(pubNames).toEqual(
+      MCP_PUBLIC_MODE_TOOL_NAMES.filter((n) => WORKFORCE_TOOL_SET.has(n as any))
+        .map((n) => `metrx_${n}`)
+        .sort()
+    );
+    expect(() => createMcpServer(fakeClient as any, { toolSet: 'nope' as any })).toThrow(
+      /Unknown MCP tool set/
+    );
+  });
+
+  it('the string-key overload accepts options as its third argument (hosted route)', () => {
+    const server = createMcpServer('sk_live_test', 'https://example.test/api', {
+      toolSet: 'workforce',
+    });
+    const names = Object.keys((server as any)._registeredTools as Record<string, any>);
+    expect(names).toHaveLength(WORKFORCE_TOOL_SET.size);
+  });
+
+  it('the admin-scoped tools are exactly the admin-gated writes', () => {
+    const admin = Object.entries(MCP_TOOL_SCOPES)
+      .filter(([, s]) => s === 'admin')
+      .map(([n]) => n)
+      .sort();
+    expect(admin).toEqual(
+      [
+        'create_model_experiment',
+        'set_budget',
+        'set_job_contract',
+        'stop_experiment',
+        'update_budget_mode',
+      ].sort()
+    );
+  });
+
+  it('a description update keeps the scope sentence (exactly once)', () => {
+    const server = createMcpServer(fakeClient as any);
+    const tool = (server as any)._registeredTools['metrx_set_budget'];
+    tool.update({ description: 'Rewritten description.' });
+    const sentence = mcpScopeSentence('admin');
+    const desc: string = (server as any)._registeredTools['metrx_set_budget'].description;
+    expect(desc.startsWith('Rewritten description.')).toBe(true);
+    expect(desc.split(sentence)).toHaveLength(2);
+  });
+
+  it('refuses to register a tool with no declared scope', () => {
+    const server = createMcpServer(fakeClient as any);
+    expect(() =>
+      (server as any).registerTool(
+        'undeclared_tool',
+        { description: 'x', inputSchema: {} },
+        async () => ({ content: [] })
+      )
+    ).toThrow(/no declared API-key scope/);
   });
 });

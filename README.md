@@ -1,75 +1,135 @@
 # Metrx MCP Server
 
-<!-- mcp-name: io.github.metrxbots/mcp-server -->
+<!-- mcp-name: com.metrxbot/mcp-server -->
 
 [![npm version](https://img.shields.io/npm/v/@metrxbot/mcp-server)](https://www.npmjs.com/package/@metrxbot/mcp-server)
-[![CI](https://github.com/metrxbots/mcp-server/actions/workflows/ci.yml/badge.svg)](https://github.com/metrxbots/mcp-server/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Smithery](https://smithery.ai/badge/@metrxbot/mcp-server)](https://smithery.ai/server/metrxbot/mcp-server)
-[![Glama](https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server/badge)](https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server)
 
-**Your AI agents are wasting money.** Metrx finds out how much, and fixes it.
+The **Model Context Protocol (MCP) server** for [Metrx](https://metrxbot.com): how a company manages the AI agents it employs. Each agent gets a job contract, a scorecard against it, and a P&L: what it cost and what it produced. This server exposes those records as tools that any MCP-compatible client (Claude, GPT, Gemini, custom agents) can call. Version 0.5.0.
 
-The official [MCP server](https://modelcontextprotocol.io) for [Metrx](https://metrxbot.com) — the AI Agent Cost Intelligence Platform. Give any MCP-compatible agent (Claude, GPT, Gemini, Cursor, Windsurf) the ability to track its own costs, detect waste, optimize model selection, and prove ROI.
-
-<a href="https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server">
-  <img width="380" height="200" src="https://glama.ai/mcp/servers/metrxbots/metrx-mcp-server/badge" alt="Metrx Server MCP server" />
-</a>
-
-## Why Metrx?
-
-| Problem | What Metrx Does |
-|---------|-----------------|
-| No visibility into agent spend | Real-time cost dashboards per agent, model, and provider |
-| Overpaying for LLM calls | Provider arbitrage finds cheaper models for the same task |
-| Runaway costs | Budget enforcement with auto-pause when limits are hit |
-| Wasted tokens | Cost leak scanner detects retry storms, context bloat, model mismatch |
-| Can't prove AI ROI | Revenue attribution links agent actions to business outcomes |
+This package is the single source for both transports: the npm package you run locally over stdio, and the hosted server at `https://metrxbot.com/api/mcp`. The public repository at https://github.com/metrxbots/mcp-server is a mirror, synced from the monorepo by `packages/mcp-server/scripts/publish-mirror.ts`. Contributors open pull requests against the monorepo; issues go to https://github.com/metrxbots/mcp-server/issues.
 
 ## Quick Start
 
-### Try it now — no signup required
+Three ways in.
+
+**1. The demo, no key.** The public desk tools answer on the Northwind sample organization, which is synthetic demo data.
 
 ```bash
 npx @metrxbot/mcp-server --demo
 ```
 
-This starts the server with sample data so you can explore all 23 tools instantly.
-
-### Connect your real data
-
-**Option A — Interactive login (recommended):**
+**2. Interactive login.** Opens the browser, saves the key locally, then verifies it.
 
 ```bash
 npx @metrxbot/mcp-server --auth
+npx @metrxbot/mcp-server --test
 ```
 
-Opens your browser to get an API key, validates it, and saves it to `~/.metrxrc` so you never need to set env vars.
-
-**Option B — Environment variable:**
+**3. A key in the environment.**
 
 ```bash
-METRX_API_KEY=sk_live_your_key_here npx @metrxbot/mcp-server --test
+METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server
 ```
 
-Get your free API key at [app.metrxbot.com/sign-up](https://app.metrxbot.com/sign-up).
+`npx @metrxbot/mcp-server --setup-claude` writes the server entry into the Claude Desktop, Cursor or VS Code config for you.
 
-### Add to your MCP client (Claude Desktop, Cursor, Windsurf)
+## Claude Code plugin
 
-If you used `--auth`, no `env` block is needed — the key is read from `~/.metrxrc` automatically:
+The desk plugin wraps the workforce tool set in five skills.
+
+```bash
+claude plugin marketplace add metrxbots/mcp-server && claude plugin install metrx-desk@metrxbots
+```
+
+Versions: this server is 0.5.0 (`@metrxbot/mcp-server`). The desk plugin (`metrx-desk`) and the TypeScript SDK (`@metrxbot/sdk`) are separate artefacts with their own version numbers and release schedules; each states its version in its own package.
+
+| Command                          | What it does                                                                                                                                                                           | Needs a key                 |
+| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `/metrx-desk:sample-review`      | The Northwind sample review (synthetic demo data), relayed with every figure's label                                                                                                   | No                          |
+| `/metrx-desk:draft-job-contract` | Draft a job contract for one agent from a template (support_triage, sdr_qualification, internal_assistant, coding_patch); owner is required; publishing is a separate admin-scope step | No                          |
+| `/metrx-desk:check-vendor-bill`  | Reconcile a per-resolution vendor bill against your own records: matched, disputed, unmatched, outside coverage, with the disputed amount                                              | No                          |
+| `/metrx-desk:connect-metrx`      | Create a key at Settings → Security, set METRX_API_KEY, restart, read your first review                                                                                                | Creates one                 |
+| `/metrx-desk:weekly-decisions`   | Your decision queue; record expand, re_specify, combine or retire with a rationale                                                                                                     | Yes (read; write to record) |
+
+The full walkthrough, including the labels every figure carries and the plain HTTP routes, is at https://docs.metrxbot.com/desk.
+
+## Tools
+
+The tool registry is published at https://metrxbot.com/.well-known/agent-card.json: names, descriptions, domains, the public subset that answers without a key, and the named tool sets. That file is the authoritative list; this README does not repeat it. Every tool's description ends with the scope it needs (`read`, `write` or `admin`).
+
+Tool names carry the `metrx_` prefix. The desk's public tools are `metrx_get_workforce_review`, `metrx_draft_job_contract` and `metrx_check_vendor_bill`. Signed-in desk tools include `metrx_get_decision_queue`, `metrx_record_decision`, `metrx_get_scorecard`, `metrx_get_job_contract` and `metrx_set_job_contract`; cost reads such as `metrx_get_cost_summary` sit alongside them. A job contract is recorded, not enforced at runtime: publishing one blocks no spend or traffic.
+
+## Guided Prompts
+
+MCP prompts are templates that walk a client through a multi-step workflow.
+
+#### `analyze-costs`
+
+Fetches the cost summary, lists agents, gets optimization recommendations and returns a prioritized breakdown.
+
+**Arguments:**
+
+- `period_days` (string, optional): number of days to analyze (default: "30")
+
+#### `find-savings`
+
+Checks recommendations, runs the cost leak scan and explains each finding in dollars.
+
+**Arguments:** none
+
+#### `cost-leak-scan`
+
+Runs the waste audit: retry storms, oversized contexts, model mismatch, missing caching, idle agents, missing budgets, arbitrage gaps.
+
+**Arguments:**
+
+- `agent_id` (string, optional): scan one agent by UUID, or omit to scan all
+
+## Installation
+
+### From npm
+
+```bash
+npm install @metrxbot/mcp-server
+```
+
+### Quick Test
+
+Verify your API key and connection:
+
+```bash
+METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test
+```
+
+## Configuration
+
+### Environment Variables
+
+- **`METRX_API_KEY`** (optional for `--demo`, required otherwise): your Metrx API key. Create one at https://app.metrxbot.com/settings/security
+- **`METRX_API_URL`** (optional): override the API base URL (default: `https://app.metrxbot.com/api`)
+
+### Hosted transport
+
+The same registry is served over streamable HTTP at `https://metrxbot.com/api/mcp`. Add `?set=workforce` to select the desk tool set. The `Authorization: Bearer sk_live_...` header is optional: without it the public tools answer on the demo (synthetic demo data).
 
 ```json
 {
   "mcpServers": {
     "metrx": {
-      "command": "npx",
-      "args": ["@metrxbot/mcp-server"]
+      "type": "http",
+      "url": "https://metrxbot.com/api/mcp?set=workforce",
+      "headers": { "Authorization": "Bearer sk_live_your_key_here" }
     }
   }
 }
 ```
 
-Or pass the key explicitly via environment:
+### MCP Client Setup (stdio)
+
+#### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
 
 ```json
 {
@@ -85,212 +145,151 @@ Or pass the key explicitly via environment:
 }
 ```
 
-### Remote HTTP endpoint
+#### Cursor
 
-For remote agents (no local install needed):
+Add to `~/.cursor/mcp.json`:
 
+```json
+{
+  "mcpServers": {
+    "metrx": {
+      "command": "npx",
+      "args": ["@metrxbot/mcp-server"],
+      "env": {
+        "METRX_API_KEY": "sk_live_your_key_here"
+      }
+    }
+  }
+}
 ```
-POST https://metrxbot.com/api/mcp
-Authorization: Bearer sk_live_your_key_here
-Content-Type: application/json
+
+#### Windsurf
+
+Add to `~/.codeium/windsurf/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "metrx": {
+      "command": "npx",
+      "args": ["@metrxbot/mcp-server"],
+      "env": {
+        "METRX_API_KEY": "sk_live_your_key_here"
+      }
+    }
+  }
+}
 ```
 
-### From npm
+Or run directly:
 
 ```bash
-npm install @metrxbot/mcp-server
+METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server
 ```
-
-## 23 Tools Across 10 Domains
-
-### Dashboard (3 tools)
-| Tool | Description |
-|------|-------------|
-| `metrx_get_cost_summary` | Comprehensive cost summary — total spend, call counts, error rates, and optimization opportunities |
-| `metrx_list_agents` | List all agents with status, category, cost metrics, and health indicators |
-| `metrx_get_agent_detail` | Detailed agent info including model, framework, cost breakdown, and performance history |
-
-### Optimization (4 tools)
-| Tool | Description |
-|------|-------------|
-| `metrx_get_optimization_recommendations` | AI-powered cost optimization recommendations per agent or fleet-wide |
-| `metrx_apply_optimization` | One-click apply an optimization recommendation to an agent |
-| `metrx_route_model` | Model routing recommendation for a specific task based on complexity |
-| `metrx_compare_models` | Compare LLM model pricing and capabilities across providers |
-
-### Budgets (3 tools)
-| Tool | Description |
-|------|-------------|
-| `metrx_get_budget_status` | Current status of all budget configurations with spend vs. limits |
-| `metrx_set_budget` | Create or update a budget with hard, soft, or monitor enforcement |
-| `metrx_update_budget_mode` | Change enforcement mode of an existing budget or pause/resume it |
-
-### Alerts (3 tools)
-| Tool | Description |
-|------|-------------|
-| `metrx_get_alerts` | Active alerts and notifications for your agent fleet |
-| `metrx_acknowledge_alert` | Mark one or more alerts as read/acknowledged |
-| `metrx_get_failure_predictions` | Predictive failure analysis — identify agents likely to fail before it happens |
-
-### Experiments (3 tools)
-| Tool | Description |
-|------|-------------|
-| `metrx_create_model_experiment` | Start an A/B test comparing two LLM models with traffic splitting |
-| `metrx_get_experiment_results` | Statistical significance, cost delta, and recommended action |
-| `metrx_stop_experiment` | Stop a running model routing experiment and lock in the winner |
-
-### Cost Leak Detector (1 tool)
-| Tool | Description |
-|------|-------------|
-| `metrx_run_cost_leak_scan` | Comprehensive 7-check cost leak audit across your entire agent fleet |
-
-### Attribution (3 tools)
-| Tool | Description |
-|------|-------------|
-| `metrx_attribute_task` | Link agent actions to business outcomes for ROI tracking |
-| `metrx_get_task_roi` | Calculate return on investment for an agent — costs vs. attributed outcomes |
-| `metrx_get_attribution_report` | Multi-source attribution report with confidence scores and top contributors |
-
-### Alert Configuration (1 tool)
-| Tool | Description |
-|------|-------------|
-| `metrx_configure_alert_threshold` | Set cost or operational alert thresholds with email, webhook, or auto-pause |
-
-### ROI Audit (1 tool)
-| Tool | Description |
-|------|-------------|
-| `metrx_generate_roi_audit` | Board-ready ROI audit report for your AI agent fleet |
-
-### Upgrade Justification (1 tool)
-| Tool | Description |
-|------|-------------|
-| `metrx_get_upgrade_justification` | ROI report for tier upgrades based on current usage patterns |
-
-## Prompts
-
-Pre-built prompt templates for common workflows:
-
-| Prompt | Description |
-|--------|-------------|
-| `analyze-costs` | Comprehensive cost overview — spend breakdown, top agents, optimization opportunities |
-| `find-savings` | Discover optimization opportunities — model downgrades, caching, routing |
-| `cost-leak-scan` | Scan for waste patterns — retry storms, oversized contexts, model mismatch |
-
-## Examples
-
-### "How much am I spending?"
-
-```
-User: What was my AI cost this week?
-→ metrx_get_cost_summary(period_days=7)
-
-Total Spend: $234.56 | Calls: 2,450 | Error Rate: 0.2%
-├── customer-support: $156.23 (1,800 calls)
-└── code-generator: $78.33 (650 calls)
-
-💡 Switch customer-support from GPT-4 to Claude Sonnet: Save $42/week
-```
-
-### "Find me savings"
-
-```
-User: Am I overpaying for my agents?
-→ metrx_compare_models(models=["gpt-4o", "claude-3-5-sonnet", "gemini-1.5-pro"])
-
-Model Comparison (per 1M tokens):
-├── gpt-4o: $2.50 in / $10.00 out
-├── claude-3-5-sonnet: $3.00 in / $15.00 out
-└── gemini-1.5-pro: $3.50 in / $10.50 out
-```
-
-### "Test a cheaper model"
-
-```
-User: Test Claude 3.5 Sonnet against my GPT-4 setup
-→ metrx_create_model_experiment(agent_id="agent_123",
-    model_a="gpt-4o", model_b="claude-3-5-sonnet-20241022", traffic_split=10)
-
-Experiment started: 90% GPT-4o, 10% Claude 3.5 Sonnet
-Check back in 14 days for statistical significance.
-```
-
-## Companion Tool: Cost Leak Detector
-
-This repo also includes [`@metrxbot/cost-leak-detector`](./packages/cost-leak-detector) — a free, offline CLI that scans your LLM API logs for wasted spend. No signup, no cloud, no data leaves your machine.
-
-```bash
-npx @metrxbot/cost-leak-detector demo
-```
-
-It runs 7 checks (idle agents, premium model overuse, missing caching, high error rates, context overflow, no budgets, arbitrage opportunities) and gives you a scored report in seconds. See the [full docs](./packages/cost-leak-detector/README.md).
-
-## Configuration
-
-### API Key (required)
-
-The server looks for your API key in this order:
-
-1. `METRX_API_KEY` environment variable
-2. `~/.metrxrc` file (created by `--auth`)
-
-Run `npx @metrxbot/mcp-server --auth` to save your key, or set the env var directly.
-
-| Variable | Required | Description |
-|----------|----------|-------------|
-| `METRX_API_KEY` | Yes* | Your Metrx API key ([get one free](https://app.metrxbot.com/sign-up)) |
-| `METRX_API_URL` | No | Override API base URL (default: `https://metrxbot.com/api/v1`) |
-
-*Not required if you've run `--auth` — the key is read from `~/.metrxrc` automatically.
-
-### CLI Flags
-
-| Flag | Description |
-|------|-------------|
-| `--demo` | Start with sample data — no API key or signup needed |
-| `--auth` | Interactive login — opens browser, validates key, saves to `~/.metrxrc` |
-| `--test` | Verify your API key and connection |
 
 ## Rate Limiting
 
-60 requests per minute per tool. For higher limits, contact support@metrxbot.com.
+The stdio server enforces per-tool-category rate limits:
 
-## Development
+| Category           | Limit                |
+| ------------------ | -------------------- |
+| Dashboard & Agents | 60 requests/minute   |
+| Metrics            | 30 requests/minute   |
+| Experiments        | 10 requests/minute   |
+| Budgets            | 10 requests/minute   |
+| Alerts             | 10 requests/minute   |
+| Attribution        | 10 requests/minute   |
+| Optimization       | 5 requests/minute    |
+| Cost Leak Scan     | 2 requests/5 minutes |
+| Default (other)    | 30 requests/minute   |
 
-```bash
-git clone https://github.com/metrxbots/mcp-server.git
-cd mcp-server
-npm install
-npm run typecheck
-npm test
+The public desk routes are limited per address at 30 requests per minute; the limit rides in the `X-RateLimit-Limit`, `X-RateLimit-Remaining` and `X-RateLimit-Reset` headers. Hitting a limit returns an error with the retry-after time in seconds.
+
+For high-volume use, contact support@metrxbot.com.
+
+## Error Handling
+
+Every refusal carries a class. Over MCP it is a JSON-RPC error with `data.class`, `data.doc` and `data.user_message`; over HTTP it is an RFC 9457 problem body with `Retry-After` on the retryable classes.
+
+| Class                 | JSON-RPC code | HTTP status | Doc                                                       |
+| --------------------- | ------------- | ----------- | --------------------------------------------------------- |
+| `auth_required`       | -32001        | 401         | https://docs.metrxbot.com/desk#errors-auth-required       |
+| `insufficient_scope`  | -32002        | 403         | https://docs.metrxbot.com/desk#errors-insufficient-scope  |
+| `rate_limited`        | -32003        | 429         | https://docs.metrxbot.com/desk#errors-rate-limited        |
+| `limiter_unavailable` | -32004        | 503         | https://docs.metrxbot.com/desk#errors-limiter-unavailable |
+| `demo_unavailable`    | -32005        | 503         | https://docs.metrxbot.com/desk#errors-demo-unavailable    |
+| `unknown_agent_key`   | -32006        | 404         | https://docs.metrxbot.com/desk#errors-unknown-agent-key   |
+| `invalid_params`      | -32602        | 400         | https://docs.metrxbot.com/desk#errors-invalid-params      |
+| `transport_error`     | -32007        | 502         | https://docs.metrxbot.com/desk#errors-transport-error     |
+
+Server errors from the upstream API (500 and above) are retried with exponential backoff, up to 3 times.
+
+## Authentication
+
+Requests to your own organization carry `METRX_API_KEY` in the Authorization header:
+
+```
+Authorization: Bearer sk_live_xxx
 ```
 
-## Contributing
+API keys are environment-scoped: `sk_live_*` for production, `sk_test_*` for testing, `mk_*` for machine keys.
 
-See [CONTRIBUTING.md](./CONTRIBUTING.md) for guidelines.
+Each key also carries scopes. Read tools need `read`; tools that change data need `write`; budget changes, publishing a job contract and creating an experiment need `admin`. An org owner or admin mints keys, including `admin`-scoped ones, in Settings → Security → API Keys.
 
-## Links
+## Testing
 
-- **Website**: [metrxbot.com](https://metrxbot.com)
-- **Docs**: [docs.metrxbot.com](https://docs.metrxbot.com)
-- **npm**: [@metrxbot/mcp-server](https://www.npmjs.com/package/@metrxbot/mcp-server)
-- **Smithery**: [metrxbot/mcp-server](https://smithery.ai/server/metrxbot/mcp-server)
-- **Support**: support@metrxbot.com
+Verify your API key:
 
-## A Note on Naming
+```bash
+METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test
+```
 
-The product is **Metrx** (metrxbot.com). The npm scope is `@metrxbot` and the Smithery listing is `metrxbot/mcp-server`. The GitHub organization is `metrxbots` (with an **s**) because `metrxbot` was already taken on GitHub. If you see `metrxbot` vs `metrxbots` across platforms, they're the same project — just a GitHub namespace constraint.
+Run the test suite:
+
+```bash
+npm run test
+```
+
+Tests cover:
+
+- Protocol compliance (MCP spec validation)
+- Tool schema and input validation
+- API client retry logic and error handling
+- Rate limiting behavior
+- Output formatting
+
+## Troubleshooting
+
+### "METRX_API_KEY environment variable is required"
+
+Set the key before starting the server, or run `--demo` for the public tools:
+
+```bash
+export METRX_API_KEY=sk_live_your_key
+npx @metrxbot/mcp-server
+```
+
+Create a key at https://app.metrxbot.com/settings/security, or run `npx @metrxbot/mcp-server --auth`.
+
+### "Rate limit exceeded"
+
+The error message includes a retry-after time in seconds. Your MCP client should retry after it. For production volume, contact support.
+
+### "401 Unauthorized" or `auth_required`
+
+Your API key is invalid, expired or missing. Create a new one at https://app.metrxbot.com/settings/security.
+
+### `unknown_agent_key`
+
+No agent in your organization has that `agent_key`. Check the Agents page in the dashboard; the error's `suggestions` lists close matches when there are any.
+
+## Support
+
+- **Docs**: https://docs.metrxbot.com (the desk: https://docs.metrxbot.com/desk)
+- **API Status**: https://status.metrxbot.com
+- **Email**: support@metrxbot.com
+- **GitHub Issues**: https://github.com/metrxbots/mcp-server/issues
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
-
-
-## 💬 Feedback
-
-Did Metrx work for you? We'd love to hear it — good or bad.
-
-- **GitHub Discussions**: [Start a thread](https://github.com/metrxbots/mcp-server/discussions) — questions, ideas, what you're building
-- **Bug reports**: [Open an issue](https://github.com/metrxbots/mcp-server/issues)
-- **Quick feedback**: Drop a comment on our [Product Hunt listing](https://www.producthunt.com/products/metrx)
-
-If you installed but hit a snag, tell us what happened — we read every report.
+MIT, see [LICENSE](./LICENSE).

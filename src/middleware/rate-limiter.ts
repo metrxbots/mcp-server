@@ -55,7 +55,6 @@ export const TOOL_CATEGORIES: Record<string, string> = {
   // Alerts (10/min)
   get_alerts: 'alerts',
   acknowledge_alert: 'alerts',
-  configure_alert_threshold: 'alerts',
   get_failure_predictions: 'alerts',
 
   // Budgets (10/min)
@@ -70,9 +69,6 @@ export const TOOL_CATEGORIES: Record<string, string> = {
 
   // Optimization (5/min)
   get_optimization_recommendations: 'optimization',
-  apply_optimization: 'optimization',
-  route_model: 'optimization',
-  compare_models: 'optimization',
 
   // Cost Leak Scan (2/5min)
   run_cost_leak_scan: 'cost-leak-scan',
@@ -85,6 +81,7 @@ export const TOOL_CATEGORIES: Record<string, string> = {
   // Default (30/min) — general-purpose tools
   generate_roi_audit: 'default',
   get_upgrade_justification: 'default',
+  get_upgrade_business_case: 'default',
 };
 
 export class RateLimiter {
@@ -175,13 +172,16 @@ export class RateLimiter {
   }
 
   private getToolCategory(toolName: string): string {
+    // Strip metrx_ namespace prefix added by server-factory before lookup
+    const unprefixed = toolName.startsWith('metrx_') ? toolName.slice(6) : toolName;
+
     // 1. Explicit mapping — guaranteed correct for all registered tools
-    if (toolName in TOOL_CATEGORIES) {
-      return TOOL_CATEGORIES[toolName];
+    if (unprefixed in TOOL_CATEGORIES) {
+      return TOOL_CATEGORIES[unprefixed];
     }
 
     // 2. Fallback: heuristic string-parsing for unregistered/future tools
-    const parts = toolName.replace(/^(get_|set_|list_|create_|update_|delete_)/, '').split('_');
+    const parts = unprefixed.replace(/^(get_|set_|list_|create_|update_|delete_)/, '').split('_');
     const category = parts[0];
 
     if (category in this.configs) {

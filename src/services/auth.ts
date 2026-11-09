@@ -15,6 +15,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { createInterface } from 'node:readline';
 import { MetrxApiClient } from './api-client.js';
+import { trackCliEvent } from './telemetry.js';
 
 // ── Constants ──
 
@@ -82,11 +83,7 @@ export function writeRcFile(apiKey: string): void {
 // ── Validate key format ──
 
 export function isValidKeyFormat(key: string): boolean {
-  return (
-    key.startsWith('sk_live_') ||
-    key.startsWith('sk_test_') ||
-    key.startsWith('mk_')
-  );
+  return key.startsWith('sk_live_') || key.startsWith('sk_test_') || key.startsWith('mk_');
 }
 
 // ── Open URL in browser ──
@@ -96,9 +93,11 @@ async function openUrl(url: string): Promise<void> {
   const { platform } = process;
 
   const cmd =
-    platform === 'darwin' ? `open "${url}"` :
-    platform === 'win32' ? `start "${url}"` :
-    `xdg-open "${url}"`;
+    platform === 'darwin'
+      ? `open "${url}"`
+      : platform === 'win32'
+        ? `start "" "${url}"`
+        : `xdg-open "${url}"`;
 
   return new Promise((resolve) => {
     exec(cmd, () => resolve()); // Swallow errors — user can open manually
@@ -124,17 +123,23 @@ function prompt(question: string): Promise<string> {
 // ── Main auth flow ──
 
 export async function runAuthFlow(): Promise<void> {
+  trackCliEvent('mcp_auth_started');
+
   console.error(`\n${CYAN}${BOLD}Metrx MCP Server — Authentication${RESET}\n`);
 
   // Check if already authenticated
   const existing = readRcFile();
   if (existing?.api_key) {
     console.error(`  ${DIM}Found existing key in ${getRcPath()}${RESET}`);
-    console.error(`  ${DIM}Key: ${existing.api_key.slice(0, 12)}…${existing.api_key.slice(-4)}${RESET}\n`);
+    console.error(
+      `  ${DIM}Key: ${existing.api_key.slice(0, 12)}…${existing.api_key.slice(-4)}${RESET}\n`
+    );
 
     const overwrite = await prompt(`  ${YELLOW}Overwrite existing key? (y/N):${RESET} `);
     if (overwrite.toLowerCase() !== 'y') {
-      console.error(`\n  ${DIM}Keeping existing key. Use METRX_API_KEY env var to override.${RESET}\n`);
+      console.error(
+        `\n  ${DIM}Keeping existing key. Use METRX_API_KEY env var to override.${RESET}\n`
+      );
       process.exit(0);
     }
     console.error('');
@@ -159,7 +164,9 @@ export async function runAuthFlow(): Promise<void> {
 
   // Validate format
   if (!isValidKeyFormat(apiKey)) {
-    console.error(`\n  ${RED}✗ Invalid key format.${RESET} Expected ${DIM}sk_live_…${RESET}, ${DIM}sk_test_…${RESET}, or ${DIM}mk_…${RESET}`);
+    console.error(
+      `\n  ${RED}✗ Invalid key format.${RESET} Expected ${DIM}sk_live_…${RESET}, ${DIM}sk_test_…${RESET}, or ${DIM}mk_…${RESET}`
+    );
     console.error(`  Get a valid key at: ${CYAN}${API_KEY_SETTINGS_URL}${RESET}\n`);
     process.exit(1);
   }
@@ -184,6 +191,7 @@ export async function runAuthFlow(): Promise<void> {
   console.error(`  ${GREEN}✓ Key validated successfully!${RESET}\n`);
 
   writeRcFile(apiKey);
+  trackCliEvent('mcp_auth_completed');
 
   console.error(`  ${GREEN}${BOLD}✓ Saved to ${getRcPath()}${RESET}\n`);
   console.error(`  Your MCP server is ready. Add this to your MCP client config:\n`);

@@ -1,0 +1,7 @@
+{
+  "name": "@metrx/desk-plugin",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Claude Code plugin: the Metrx manager's desk (workforce review, job contracts, vendor bill check, weekly decisions). Source of truth for the metrx-desk plugin published through the metrxbots/mcp-server marketplace.",
+  "license": "MIT"
+}

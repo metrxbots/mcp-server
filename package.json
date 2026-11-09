@@ -1,42 +1,54 @@
 {
   "name": "@metrxbot/mcp-server",
-  "version": "0.2.7",
-  "description": "Metrx MCP Server — AI agent cost intelligence tools for LLM agents. Track spend, optimize models, manage budgets, detect waste, and prove ROI.",
+  "version": "0.5.0",
+  "description": "Metrx MCP Server — optimization and cost-intelligence tools for AI agents",
   "type": "module",
   "main": "dist/index.js",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
+      "types": "./src/index.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
     "./server-factory": {
-      "types": "./dist/server-factory.d.ts",
+      "types": "./src/server-factory.ts",
       "import": "./dist/server-factory.js",
       "default": "./dist/server-factory.js"
+    },
+    "./constants": {
+      "types": "./src/constants.ts",
+      "import": "./dist/constants.js",
+      "default": "./dist/constants.js"
+    },
+    "./tool-registry-facts": {
+      "types": "./src/tool-registry-facts.ts",
+      "import": "./dist/tool-registry-facts.js",
+      "default": "./dist/tool-registry-facts.js"
     }
   },
   "bin": {
     "metrx-mcp": "dist/index.js"
   },
   "scripts": {
+    "postinstall": "node scripts/postinstall.cjs",
     "build": "tsc",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
+    "pretest": "tsc",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run build",
-    "postinstall": "node scripts/postinstall.cjs"
+    "mirror:check": "tsx scripts/publish-mirror.ts --check",
+    "mirror:sync": "tsx scripts/publish-mirror.ts --sync --check --mirror ../../../mcp-server-public"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.12.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "zod": "^3.23.0"
   },
   "devDependencies": {
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.43",
     "@vitest/ui": "^1.0.0",
-    "tsx": "^4.0.0",
+    "tsx": "^4.23.15",
     "typescript": "^5.5.0",
     "vitest": "^1.6.0"
   },
@@ -66,6 +78,7 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "mcpName": "com.metrxbot/mcp-server",
   "repository": {
     "type": "git",
     "url": "https://github.com/metrxbots/mcp-server.git"
@@ -74,7 +87,6 @@
     "url": "https://github.com/metrxbots/mcp-server/issues"
   },
   "homepage": "https://metrxbot.com",
-  "mcpName": "io.github.metrxbots/mcp-server",
   "publishConfig": {
     "access": "public"
   },

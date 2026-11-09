@@ -1,8 +1,16 @@
 /**
  * Model Routing Experiment Tools
  *
- * Tools for creating and managing A/B tests comparing
- * different LLM models for cost/quality optimization.
+ * Read and manage the per-agent model routing experiments stored in
+ * model_routing_experiments (migration 025), over the per-agent routes:
+ *   GET   /api/agents/{agent_id}/experiments                  — list (requireAuth)
+ *   POST  /api/agents/{agent_id}/experiments                  — create a DRAFT (requireAdmin)
+ *   PATCH /api/agents/{agent_id}/experiments/{experiment_id}  — status change (requireAuth)
+ *
+ * Until W1-4b these tools called /api/experiments*, which has never existed —
+ * every call 404'd. They now describe only what the routes above actually do:
+ * creation records a DRAFT (no traffic is routed), there is no auto-promotion,
+ * and stopping marks the experiment completed.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -11,6 +19,8 @@ import type { MetrxApiClient } from '../services/api-client.js';
 import type { ModelRoutingExperiment } from '../types.js';
 import { formatExperiment } from '../services/formatters.js';
 
+const EXPERIMENT_STATUSES = ['draft', 'running', 'paused', 'completed', 'cancelled'] as const;
+
 export function registerExperimentTools(server: McpServer, client: MetrxApiClient): void {
   // ── create_model_experiment ──
   server.registerTool(
@@ -18,39 +28,32 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
     {
       title: 'Create Model Experiment',
       description:
-        'Start an A/B test comparing two LLM models for a specific agent. ' +
-        'Routes a percentage of traffic to the treatment model and tracks ' +
-        'cost, latency, error rate, and quality metrics. The experiment runs ' +
-        'until statistical significance is reached or the max duration expires. ' +
-        'Do NOT use for one-off model comparisons — use compare_models for static pricing data.',
+        "Record a DRAFT A/B experiment comparing an agent's current model (control) with a candidate " +
+        '(treatment) model. Creating it does NOT start routing traffic: the experiment is stored with ' +
+        "status 'draft'. If control_model is omitted, the API uses the model the agent ran most often " +
+        'in the last 90 days (and refuses if it cannot determine one, or if it equals the treatment). ' +
+        "Needs an API key with the 'admin' scope (an org owner or admin mints one in Settings → Security → API Keys). " +
+        'Do NOT use to read results — use get_experiment_results.',
       inputSchema: {
-        agent_id: z.string().uuid().describe('Agent to run the experiment on'),
+        agent_id: z.string().uuid().describe('Agent (UUID) the experiment belongs to'),
         name: z.string().min(1).max(100).describe('Human-readable experiment name'),
         treatment_model: z
           .string()
-          .describe('The candidate model to test (e.g., "gpt-4o-mini", "claude-haiku-4-20250414")'),
+          .min(1)
+          .describe('The candidate model to test (e.g., "gpt-4o-mini", "claude-haiku-4-5")'),
         traffic_pct: z
           .number()
           .int()
           .min(1)
           .max(50)
           .default(10)
-          .describe('Percentage of traffic to route to the treatment model (default: 10%)'),
-        primary_metric: z
-          .enum(['cost_per_call', 'latency_p50', 'latency_p95', 'error_rate', 'quality_score'])
-          .default('cost_per_call')
-          .describe('The primary metric to optimize for (default: cost_per_call)'),
-        max_duration_days: z
-          .number()
-          .int()
+          .describe('Planned percentage of traffic for the treatment model, 1-50 (default: 10)'),
+        control_model: z
+          .string()
           .min(1)
-          .max(30)
-          .default(14)
-          .describe('Maximum experiment duration in days (default: 14)'),
-        auto_promote: z
-          .boolean()
-          .default(false)
-          .describe('Automatically apply the winning model when the experiment completes'),
+          .optional()
+          .describe("Baseline model. Omit to use the agent's most-used model of the last 90 days."),
+        description: z.string().max(1000).optional().describe('Optional free-text description'),
       },
       annotations: {
         readOnlyHint: false,
@@ -59,26 +62,19 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
         openWorldHint: false,
       },
     },
-    async ({
-      agent_id,
-      name,
-      treatment_model,
-      traffic_pct,
-      primary_metric,
-      max_duration_days,
-      auto_promote,
-    }) => {
+    async ({ agent_id, name, treatment_model, traffic_pct, control_model, description }) => {
       const body: Record<string, unknown> = {
-        agent_id,
         name,
         treatment_model,
         traffic_pct: traffic_pct ?? 10,
-        primary_metric: primary_metric ?? 'cost_per_call',
-        max_duration_days: max_duration_days ?? 14,
-        auto_promote: auto_promote ?? false,
       };
+      if (control_model) body.control_model = control_model;
+      if (description) body.description = description;
 
-      const result = await client.post<ModelRoutingExperiment>('/experiments', body);
+      const result = await client.post<ModelRoutingExperiment>(
+        `/agents/${agent_id}/experiments`,
+        body
+      );
 
       if (result.error) {
         return {
@@ -89,11 +85,11 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
 
       const exp = result.data!;
       const text = [
-        `✅ Experiment "${exp.name}" created.`,
+        `✅ Experiment "${exp.name}" recorded as a ${exp.status ?? 'draft'}.`,
         '',
         formatExperiment(exp),
         '',
-        'The experiment will start routing traffic immediately. Use get_experiment_results to check progress.',
+        'No traffic is routed while the experiment is a draft. Use get_experiment_results to read it back.',
       ].join('\n');
 
       return {
@@ -108,16 +104,16 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
     {
       title: 'Get Experiment Results',
       description:
-        'Get the current results of a model routing experiment. ' +
-        'Shows sample counts, metric comparisons, statistical significance, ' +
-        'and the current winner (if determined). ' +
+        "List an agent's model routing experiments, newest first: status, control vs treatment " +
+        'model with sample counts, traffic split, primary metric, significance, p-value and winner ' +
+        '(control | treatment | inconclusive) where recorded. Optionally filter by status. ' +
         'Do NOT use for starting experiments — use create_model_experiment.',
       inputSchema: {
-        agent_id: z.string().uuid().optional().describe('Filter experiments by agent'),
+        agent_id: z.string().uuid().describe('Agent (UUID) whose experiments to list'),
         status: z
-          .enum(['running', 'paused', 'completed', 'cancelled'])
+          .enum(EXPERIMENT_STATUSES)
           .optional()
-          .describe('Filter by experiment status'),
+          .describe('Only show experiments in this status'),
       },
       annotations: {
         readOnlyHint: true,
@@ -127,14 +123,7 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
       },
     },
     async ({ agent_id, status }) => {
-      const params: Record<string, string> = {};
-      if (agent_id) params.agent_id = agent_id;
-      if (status) params.status = status;
-
-      const result = await client.get<{ experiments: ModelRoutingExperiment[] }>(
-        '/experiments',
-        params
-      );
+      const result = await client.get<ModelRoutingExperiment[]>(`/agents/${agent_id}/experiments`);
 
       if (result.error) {
         return {
@@ -143,13 +132,16 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
         };
       }
 
-      const experiments = result.data?.experiments || [];
+      const all = Array.isArray(result.data) ? result.data : [];
+      const experiments = status ? all.filter((e) => e.status === status) : all;
       if (experiments.length === 0) {
         return {
           content: [
             {
               type: 'text',
-              text: 'No experiments found. Use create_model_experiment to start an A/B test.',
+              text: status
+                ? `No ${status} experiments for this agent (${all.length} in other statuses).`
+                : 'No experiments for this agent. Use create_model_experiment to record one.',
             },
           ],
         };
@@ -169,15 +161,12 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
     {
       title: 'Stop Experiment',
       description:
-        'Stop a running model routing experiment. The experiment results are preserved. ' +
-        'If the treatment model won, you can optionally promote it as the new default. ' +
-        'Do NOT use for pausing experiments temporarily — stopping is permanent.',
+        "Stop a model routing experiment by setting its status to 'completed'. Recorded results are " +
+        'preserved. This does not promote either model — nothing changes about which model the agent ' +
+        'runs. Do NOT use for pausing — completion is final.',
       inputSchema: {
+        agent_id: z.string().uuid().describe('Agent (UUID) the experiment belongs to'),
         experiment_id: z.string().uuid().describe('The experiment ID to stop'),
-        promote_winner: z
-          .boolean()
-          .default(false)
-          .describe('If the treatment model won, apply it as the new default model'),
       },
       annotations: {
         readOnlyHint: false,
@@ -186,10 +175,10 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
         openWorldHint: false,
       },
     },
-    async ({ experiment_id, promote_winner }) => {
-      const result = await client.post<{ status: string; promoted: boolean }>(
-        `/experiments/${experiment_id}/stop`,
-        { promote_winner: promote_winner ?? false }
+    async ({ agent_id, experiment_id }) => {
+      const result = await client.patch<ModelRoutingExperiment>(
+        `/agents/${agent_id}/experiments/${experiment_id}`,
+        { status: 'completed' }
       );
 
       if (result.error) {
@@ -199,14 +188,14 @@ export function registerExperimentTools(server: McpServer, client: MetrxApiClien
         };
       }
 
-      const d = result.data!;
-      let text = `✅ Experiment stopped. Status: ${d.status}`;
-      if (d.promoted) {
-        text += '\n🔄 Treatment model has been promoted as the new default.';
-      }
-
+      const d = result.data;
       return {
-        content: [{ type: 'text', text }],
+        content: [
+          {
+            type: 'text',
+            text: `✅ Experiment ${d?.name ? `"${d.name}" ` : ''}stopped. Status: ${d?.status ?? 'completed'}`,
+          },
+        ],
       };
     }
   );
