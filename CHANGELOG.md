@@ -18,12 +18,15 @@ This repository is now a source mirror of `packages/mcp-server` in the Metrx mon
 - **The `metrx-desk` plugin** for Claude Code and Codex, under `packages/metrx-desk-plugin`, with marketplace manifests in `.claude-plugin/` and `.agents/plugins/`.
 - **One error table.** Desk errors reach the client as JSON-RPC errors `-32001` to `-32008`, each with a recovery step.
 
+### Fixed
+- **Every keyed call reached the wrong address in 0.2.x.** The client resolved each path against the API base with `new URL(path, base)`, which drops the base's `/api/v1`, so requests went to dashboard pages and failed to parse. 0.5.0 joins the base and the path, and keyed tools return data again.
+
 ### Changed
 - `@modelcontextprotocol/sdk` is now ^1.32.1.
 - **Without an API key, the server lists only the three keyless desk tools.** The old offline demo client, which answered 23 tools with fixtures, is removed. Use `org=demo` on the workforce review for a sample.
 
 ### Removed
-- `metrx_apply_optimization`, `metrx_compare_models`, `metrx_configure_alert_threshold` and `metrx_route_model` are no longer in the package. The hosted server had already dropped them.
+- `metrx_apply_optimization`, `metrx_compare_models`, `metrx_configure_alert_threshold` and `metrx_route_model` are no longer in the package. None of them ever worked with a key: each called a server route that has never existed, and they answered only in `--demo`, from fixtures. The hosted server dropped them in October for the same reason. For what they pointed at, use `metrx_get_optimization_recommendations` and then `metrx_create_model_experiment` or `metrx_verify_switch` (a measured trial in place of a one-click change), and `metrx_set_budget` for cost limits. A model price comparison will return as a working tool in a later release.
 - Source files the monorepo does not have: `src/auth/oauth-dcr.ts`, `src/services/demo-client.ts`, `src/tools/alert-config.ts`, and their tests.
 
 ## [0.2.7] - 2026-10-13
