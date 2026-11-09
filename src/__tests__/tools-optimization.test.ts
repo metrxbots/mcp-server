@@ -3,8 +3,7 @@
  *
  * Tests for:
  * - get_optimization_recommendations (input validation, filtering, response formatting)
- * - apply_optimization (write operation, payload handling, error scenarios)
- * - compare_models (if present)
+ * (apply_optimization / route_model / compare_models were removed in W1-4b.)
  */
 
 import { describe, it, expect, beforeEach, vi } from 'vitest';
@@ -44,22 +43,11 @@ describe('Optimization Tools Registration', () => {
     );
   });
 
-  it('should register apply_optimization tool', () => {
+  it('registers only get_optimization_recommendations (apply/route/compare removed in W1-4b)', () => {
     registerOptimizationTools(mockServer as any, mockClient as any);
 
-    expect(mockServer.registerTool).toHaveBeenCalledWith(
-      'apply_optimization',
-      expect.objectContaining({
-        title: 'Apply Optimization',
-      }),
-      expect.any(Function)
-    );
-  });
-
-  it('should register optimization tools', () => {
-    registerOptimizationTools(mockServer as any, mockClient as any);
-
-    expect((mockServer.registerTool as any).mock.calls.length).toBeGreaterThanOrEqual(2);
+    const names = (mockServer.registerTool as any).mock.calls.map(([n]: [string]) => n);
+    expect(names).toEqual(['get_optimization_recommendations']);
   });
 
   describe('tool annotations', () => {
@@ -73,19 +61,10 @@ describe('Optimization Tools Registration', () => {
       expect(config.annotations?.readOnlyHint).toBe(true);
       expect(config.annotations?.destructiveHint).toBe(false);
     });
-
-    it('apply_optimization should be write operation', () => {
-      registerOptimizationTools(mockServer as any, mockClient as any);
-
-      const calls = (mockServer.registerTool as any).mock.calls;
-      const applyCall = calls.find(([name]: [string]) => name === 'apply_optimization');
-      const config = applyCall[1];
-
-      expect(config.annotations?.readOnlyHint).toBe(false);
-      expect(config.annotations?.destructiveHint).toBe(false);
-    });
   });
 });
+
+const AGENT = '123e4567-e89b-12d3-a456-426614174000';
 
 describe('get_optimization_recommendations Handler', () => {
   let mockServer: ReturnType<typeof createMockServer>;
@@ -115,9 +94,10 @@ describe('get_optimization_recommendations Handler', () => {
 
     await optRecommendationsHandler({ include_revenue: true });
 
+    // Fleet reads /dashboard/suggestions (v2): /dashboard has no optimization block.
     expect(mockClient.get).toHaveBeenCalledWith(
-      '/dashboard',
-      expect.objectContaining({ include_optimization: true })
+      '/dashboard/suggestions',
+      expect.objectContaining({ limit: '10' })
     );
   });
 
@@ -148,10 +128,10 @@ describe('get_optimization_recommendations Handler', () => {
       },
     });
 
-    await optRecommendationsHandler({ include_revenue: true });
+    await optRecommendationsHandler({ agent_id: AGENT, include_revenue: true });
 
     expect(mockClient.get).toHaveBeenCalledWith(
-      '/dashboard',
+      `/agents/${AGENT}/metrics`,
       expect.objectContaining({ include_revenue: true })
     );
   });
@@ -163,10 +143,10 @@ describe('get_optimization_recommendations Handler', () => {
       },
     });
 
-    await optRecommendationsHandler({ include_revenue: false });
+    await optRecommendationsHandler({ agent_id: AGENT, include_revenue: false });
 
     expect(mockClient.get).toHaveBeenCalledWith(
-      '/dashboard',
+      `/agents/${AGENT}/metrics`,
       expect.objectContaining({ include_revenue: false })
     );
   });
@@ -191,12 +171,7 @@ describe('get_optimization_recommendations Handler', () => {
 
   it('should return message when no fleet-wide suggestions', async () => {
     (mockClient.get as any).mockResolvedValueOnce({
-      data: {
-        optimization: {
-          suggestions: [],
-          suggestion_count: 0,
-        },
-      },
+      data: { status: 'no_suggestions', suggestions: [], total_savings_cents: 0 },
     });
 
     const result = await optRecommendationsHandler({});
@@ -224,7 +199,7 @@ describe('get_optimization_recommendations Handler', () => {
       },
     });
 
-    const result = await optRecommendationsHandler({});
+    const result = await optRecommendationsHandler({ agent_id: AGENT });
 
     expect(result.content).toBeDefined();
     expect(result.content[0].type).toBe('text');
@@ -242,116 +217,97 @@ describe('get_optimization_recommendations Handler', () => {
   });
 });
 
-describe('apply_optimization Handler', () => {
+describe('get_optimization_recommendations — one savings definition (v2)', () => {
   let mockServer: ReturnType<typeof createMockServer>;
   let mockClient: MetrxApiClient;
-  let applyOptHandler: Function;
+  let handler: (args: Record<string, unknown>) => Promise<any>;
 
   beforeEach(() => {
     mockServer = createMockServer();
     mockClient = createMockClient();
     registerOptimizationTools(mockServer as any, mockClient as any);
-
     const calls = (mockServer.registerTool as any).mock.calls;
-    const applyCall = calls.find(([name]: [string]) => name === 'apply_optimization');
-    applyOptHandler = applyCall[2];
+    handler = calls.find(([n]: [string]) => n === 'get_optimization_recommendations')[2];
   });
 
-  it('should post optimization with agent_id and type', async () => {
-    const agentId = '123e4567-e89b-12d3-a456-426614174000';
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { success: true },
+  it('agent: prints the route total verbatim (same number as the card), two decimals under $100', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({
+      data: {
+        optimization: {
+          status: 'current',
+          stale_reason: null,
+          suggestions: [
+            {
+              type: 'provider_arbitrage',
+              title: 'Switch from gpt-4o to x',
+              description: '',
+              impact_monthly_cents: 500,
+              confidence: 'medium',
+            },
+            {
+              type: 'provider_arbitrage',
+              title: 'Switch from claude-sonnet-4.5 to y',
+              description: '',
+              impact_monthly_cents: 300,
+              confidence: 'medium',
+            },
+          ],
+          total_monthly_savings_cents: 640,
+          measured_window_spend_cents: 5000,
+          suggestion_count: 2,
+        },
+      },
     });
+    const res = await handler({ agent_id: '123e4567-e89b-12d3-a456-426614174000' });
+    expect(res.content[0].text).toContain('$6.40/month');
+    expect(res.content[0].text).toMatch(/Estimate/);
+  });
 
-    await applyOptHandler({
-      agent_id: agentId,
-      optimization_type: 'token_guardrails',
+  it('agent: a stale-definition row says "recalculating", never "already well-optimized" or $0', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({
+      data: {
+        optimization: {
+          status: 'stale_definition',
+          stale_reason: 'recalculating',
+          suggestions: [],
+          total_monthly_savings_cents: null,
+          suggestion_count: 0,
+        },
+      },
     });
+    const res = await handler({ agent_id: '123e4567-e89b-12d3-a456-426614174000' });
+    const text = res.content[0].text as string;
+    expect(text).toMatch(/recalculating/i);
+    expect(text).not.toMatch(/well-optimized/);
+    expect(text).not.toContain('$0.00');
+  });
 
-    expect(mockClient.post).toHaveBeenCalledWith(
-      `/agents/${agentId}/settings`,
-      expect.objectContaining({
-        optimization_type: 'token_guardrails',
-      })
+  it('fleet: reads /dashboard/suggestions (the /dashboard payload has no optimization block)', async () => {
+    (mockClient.get as any).mockResolvedValueOnce({
+      data: {
+        status: 'ready',
+        total_savings_cents: 640,
+        recalculating_agent_count: 1,
+        suggestions: [
+          {
+            type: 'provider_arbitrage',
+            title: 'Switch from gpt-4o to x',
+            description: '',
+            impact_monthly_cents: 500,
+            confidence: 'medium',
+            agent_name: 'invoice-extractor',
+          },
+        ],
+      },
+    });
+    const res = await handler({});
+    expect(mockClient.get).toHaveBeenCalledWith(
+      '/dashboard/suggestions',
+      expect.objectContaining({ limit: '10' })
     );
-  });
-
-  it('should include payload in request', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { success: true },
-    });
-
-    const payload = { max_tokens: 2000 };
-    await applyOptHandler({
-      agent_id: '123e4567-e89b-12d3-a456-426614174000',
-      optimization_type: 'token_guardrails',
-      payload,
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        max_tokens: 2000,
-      })
-    );
-  });
-
-  it('should handle missing payload parameter', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { success: true },
-    });
-
-    await applyOptHandler({
-      agent_id: '123e4567-e89b-12d3-a456-426614174000',
-      optimization_type: 'model_switch',
-    });
-
-    expect(mockClient.post).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.objectContaining({
-        optimization_type: 'model_switch',
-      })
-    );
-  });
-
-  it('should return success message on completion', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      data: { applied: true, changes: 'max_tokens=2000' },
-    });
-
-    const result = await applyOptHandler({
-      agent_id: '123e4567-e89b-12d3-a456-426614174000',
-      optimization_type: 'token_guardrails',
-    });
-
-    expect(result.content[0].text).toContain('✅');
-  });
-
-  it('should return error when optimization application fails', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      error: 'API request failed (400): Invalid optimization type',
-    });
-
-    const result = await applyOptHandler({
-      agent_id: '123e4567-e89b-12d3-a456-426614174000',
-      optimization_type: 'invalid_type',
-    });
-
-    expect(result.isError).toBe(true);
-    expect(result.content[0].text).toContain('Error applying optimization');
-  });
-
-  it('should handle network errors', async () => {
-    (mockClient.post as any).mockResolvedValueOnce({
-      error: 'Network error: Connection timeout',
-    });
-
-    const result = await applyOptHandler({
-      agent_id: '123e4567-e89b-12d3-a456-426614174000',
-      optimization_type: 'token_guardrails',
-    });
-
-    expect(result.isError).toBe(true);
+    const text = res.content[0].text as string;
+    expect(text).toContain('$6.40/month');
+    expect(text).toMatch(/1 agent.*recalculating/i);
   });
 });
 
@@ -371,29 +327,5 @@ describe('Input Validation', () => {
     const schema = optCall[1].inputSchema;
 
     expect(schema.agent_id).toBeDefined();
-  });
-
-  it('apply_optimization should require agent_id', () => {
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const applyCall = calls.find(([name]: [string]) => name === 'apply_optimization');
-    const schema = applyCall[1].inputSchema;
-
-    expect(schema.agent_id).toBeDefined();
-  });
-
-  it('apply_optimization should require optimization_type', () => {
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const applyCall = calls.find(([name]: [string]) => name === 'apply_optimization');
-    const schema = applyCall[1].inputSchema;
-
-    expect(schema.optimization_type).toBeDefined();
-  });
-
-  it('apply_optimization should accept optional payload', () => {
-    const calls = (mockServer.registerTool as any).mock.calls;
-    const applyCall = calls.find(([name]: [string]) => name === 'apply_optimization');
-    const schema = applyCall[1].inputSchema;
-
-    expect(schema.payload).toBeDefined();
   });
 });

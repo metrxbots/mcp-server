@@ -1,8 +1,12 @@
 /**
  * Upgrade Justification Tools
  *
- * Tools for generating ROI reports explaining why tier upgrades
- * from Starter to Lite/Pro make sense based on current usage patterns.
+ * Generates an ROI report explaining why paying for Metrx makes sense based on
+ * current usage. V3 (spec R5): the legacy Lite/Pro tiers are RETIRED — the paid
+ * offers are Verify (a buyable per-verdict wedge: "no verdict, no charge") and
+ * Platform (the primary offer, priced to the customer's managed LLM spend and
+ * quoted per-prospect, so it is presented as "talk to us", never a public band
+ * number). This report retargets accordingly and quotes no retired prices.
  */
 
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
@@ -10,6 +14,10 @@ import { z } from 'zod';
 import type { MetrxApiClient } from '../services/api-client.js';
 import type { DashboardSummary } from '../types.js';
 import { formatCents, formatPct } from '../services/formatters.js';
+import { readStoredSavingsTotal, type StoredSavingsRead } from '../services/stored-savings.js';
+
+/** Verify list price (cents). Mirrors apps/web pricing-model PRICING_MODEL.verify.standardCents. */
+const VERIFY_STANDARD_CENTS = 14_900;
 
 export function registerUpgradeJustificationTools(server: McpServer, client: MetrxApiClient): void {
   // ── get_upgrade_justification ──
@@ -18,10 +26,10 @@ export function registerUpgradeJustificationTools(server: McpServer, client: Met
     {
       title: 'Get Upgrade Justification',
       description:
-        'Generate an ROI report explaining why an upgrade from Starter to Lite/Pro tier makes sense. ' +
-        'Analyzes current usage patterns, calculates optimization potential at higher tiers, ' +
-        'and provides a structured upgrade recommendation with projected monthly savings. ' +
-        'Do NOT use if already on Lite or Pro tier — not relevant for paid-tier users.',
+        'Generate an ROI report explaining why paying for Metrx makes sense based on current usage. ' +
+        'Analyzes usage and optimization potential, then recommends Verify (a buyable per-verdict ' +
+        'proof — no verdict, no charge) and Platform (priced to your managed LLM spend; talk to us). ' +
+        'Legacy Lite/Pro tiers are retired and never recommended.',
       inputSchema: {
         period_days: z
           .number()
@@ -41,7 +49,7 @@ export function registerUpgradeJustificationTools(server: McpServer, client: Met
     async ({ period_days }) => {
       // Get dashboard summary for the period
       const result = await client.get<DashboardSummary>('/dashboard', {
-        period_days: period_days ?? 30,
+        days: period_days ?? 30,
       });
 
       if (result.error) {
@@ -52,7 +60,10 @@ export function registerUpgradeJustificationTools(server: McpServer, client: Met
       }
 
       const data = result.data!;
-      const text = formatUpgradeJustification(data, period_days ?? 30);
+      // The savings figure every other surface shows (stored v2 total), not a
+      // field /dashboard never returned.
+      const savings = await readStoredSavingsTotal(client);
+      const text = formatUpgradeJustification(data, data.period_days ?? period_days ?? 30, savings);
 
       return {
         content: [{ type: 'text', text }],
@@ -65,7 +76,11 @@ export function registerUpgradeJustificationTools(server: McpServer, client: Met
  * Format upgrade justification report.
  * Calculates tier-based potential and ROI.
  */
-function formatUpgradeJustification(summary: DashboardSummary, periodDays: number): string {
+function formatUpgradeJustification(
+  summary: DashboardSummary,
+  periodDays: number,
+  savings: StoredSavingsRead
+): string {
   const lines: string[] = ['## Upgrade Justification Report', ''];
 
   // Current tier (assumed Free if no optimization data)
@@ -74,86 +89,80 @@ function formatUpgradeJustification(summary: DashboardSummary, periodDays: numbe
   lines.push(`**Current Tier**: Starter (Free)`);
   lines.push(`**Active Agents**: ${summary.agents.active} / ${summary.agents.total}`);
   lines.push(`**Total LLM Calls**: ${summary.cost.total_calls.toLocaleString()}`);
-  lines.push(`**Current Monthly Cost**: ${formatCents(summary.cost.total_cost_cents)}`);
+  lines.push(
+    `**LLM Cost (last ${periodDays} days)**: ${formatCents(summary.cost.total_cost_cents)}`
+  );
   lines.push(`**Error Rate**: ${formatPct(summary.cost.error_rate)}`);
   lines.push('');
 
-  // Optimization potential (available in Free tier but limited)
-  const currentSavings = summary.optimization?.total_savings_cents || 0;
-  const currentSavingsMontly = (currentSavings / periodDays) * 30;
+  // Optimization potential: the stored monthly estimate (already per month —
+  // no window rescaling). Unknown is said as unknown, never $0.00.
+  const savingsText =
+    savings.total_cents === null
+      ? `not available — ${savings.reason}`
+      : `${formatCents(savings.total_cents)}/month (estimate, modeled — not measured)`;
 
   lines.push('### Optimization Potential');
   lines.push(
-    `**Available Optimizations**: ${summary.optimization?.suggestion_count || 0} suggestions`
+    `**Available Optimizations**: ${
+      savings.suggestion_count === null ? 'n/a' : `${savings.suggestion_count} suggestions`
+    }`
   );
-  lines.push(
-    `**Identified Monthly Savings**: ${formatCents(currentSavingsMontly)} (without upgrade)`
-  );
+  lines.push(`**Identified Monthly Savings**: ${savingsText}`);
   lines.push('');
 
-  // Tier comparison and upgrade benefits
-  lines.push('### Upgrade Benefits');
+  // V3 paid offers (legacy Lite/Pro retired — spec R5).
+  lines.push('### How Metrx is priced');
   lines.push('');
-  lines.push('**Lite Tier — $19/month:**');
-  lines.push('- Up to 10 agents, 50k calls/month, 30-day history');
-  lines.push('- Advanced optimization recommendations (10x more suggestions)');
-  lines.push('- Real-time failure prediction');
-  lines.push('- Model routing experiments');
-  lines.push('- Priority API rate limits (300 req/min vs 30)');
+  lines.push(`**Verify — ${formatCents(VERIFY_STANDARD_CENTS)} per verification (buyable now):**`);
+  lines.push('- One causal verdict on your own production traffic.');
+  lines.push('- No verdict, no charge — a safe programmatic bet.');
+  lines.push('- The front door: prove the savings are real before you commit to more.');
   lines.push('');
-  lines.push('**Pro Tier — $49/month:**');
-  lines.push('- Unlimited agents, 100k calls/month, 90-day history');
-  lines.push('- Everything in Lite plus revenue attribution');
-  lines.push('- Advanced anomaly detection');
-  lines.push('- Custom dashboards and team collaboration');
+  lines.push('**Platform — priced to your managed LLM spend (talk to us):**');
+  lines.push('- A monthly platform fee, indexed to what you spend on LLMs.');
+  lines.push('- Full optimization, attribution, P&L, ROI tracking, alerts, and history.');
+  lines.push('- Your price is quoted from your own spend — reach out for your number.');
   lines.push('');
 
-  // Calculate projected ROI
+  // Frame the opportunity against real optimization potential (no fixed tier price
+  // to compare to — Platform is spend-indexed and quoted per customer).
   const monthlyCost = (summary.cost.total_cost_cents / periodDays) * 30;
-  const liteTierPrice = 1900; // $19/month in cents
-  const _proTierPrice = 4900; // $49/month in cents
-  const upgradedSavings = currentSavingsMontly * 1.5; // Estimate 50% more optimization with Lite
 
-  lines.push('### ROI Projection');
+  lines.push('### The opportunity');
   lines.push(`**Projected Monthly LLM Cost**: ${formatCents(monthlyCost)}`);
-  lines.push(`**Lite Tier Subscription**: ${formatCents(liteTierPrice)}`);
-  lines.push(`**Additional Savings with Lite**: ${formatCents(upgradedSavings)}`);
+  lines.push(`**Identified Monthly Savings**: ${savingsText}`);
+  lines.push(
+    '**Verify cost to prove it**: ' +
+      `${formatCents(VERIFY_STANDARD_CENTS)} — refunded if we can't produce a verdict.`
+  );
   lines.push('');
-
-  // Net benefit = additional savings from upgrade minus subscription cost
-  const netBenefit = upgradedSavings - liteTierPrice;
-  const breakEven =
-    netBenefit > 0
-      ? 'Upgrade pays for itself immediately'
-      : upgradedSavings > 0
-        ? `Breakeven in ${Math.ceil(liteTierPrice / (upgradedSavings / 30))} days`
-        : 'Upgrade cost exceeds current optimization potential — revisit when volume grows';
 
   lines.push('### Recommendation');
   if (summary.cost.total_calls > 100000) {
     lines.push(
-      `🟢 **Strongly Recommended**: Your volume (${summary.cost.total_calls.toLocaleString()} calls) qualifies for Lite tier.`
+      `🟢 **Strongly Recommended**: at your volume (${summary.cost.total_calls.toLocaleString()} calls) ` +
+        'buy a Verify verdict to prove the savings, then talk to us about Platform.'
     );
-    lines.push(`${breakEven}`);
-    if (summary.optimization && summary.optimization.suggestion_count > 5) {
+    if (savings.suggestion_count !== null && savings.suggestion_count > 5) {
       lines.push(
-        `You have ${summary.optimization.suggestion_count} active optimization opportunities that Lite tier can fully leverage.`
+        `You have ${savings.suggestion_count} active optimization opportunities Platform can capture continuously.`
       );
     }
   } else if (summary.cost.total_calls > 50000) {
-    lines.push(`🟡 **Consider Lite**: Your volume is growing and you have optimization potential.`);
     lines.push(
-      'Upgrade once you hit 100k calls/month or if you need real-time failure prediction.'
+      `🟡 **Consider Verify**: your volume is growing and you have optimization potential — ` +
+        'a single verdict is the low-risk way to prove it.'
     );
   } else {
-    lines.push(`⚠️ **Not Yet Recommended**: Free tier is sufficient for your current volume.`);
-    lines.push('Revisit this when you reach 50,000+ calls per month.');
+    lines.push(`⚠️ **Not Yet**: the free tier is sufficient for your current volume.`);
+    lines.push('Revisit — or buy one Verify verdict — when you reach 50,000+ calls per month.');
   }
 
   lines.push('');
   lines.push('---');
   lines.push(
-    '*Run `get_cost_summary` periodically to track growth and identify when upgrade becomes beneficial.*'
+    '*Run `get_cost_summary` periodically to track growth and identify when Verify/Platform pays off.*'
   );
 
   return lines.join('\n');

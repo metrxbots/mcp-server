@@ -10,6 +10,64 @@ import { z } from 'zod';
 import type { MetrxApiClient } from '../services/api-client.js';
 import type { BudgetStatus, BudgetConfig } from '../types.js';
 import { formatBudgetStatus, formatMicrocents } from '../services/formatters.js';
+import { dollarsToMicrodollars } from '../services/units.js';
+
+/** Where an org owner/admin changes budgets. */
+export const BUDGETS_DASHBOARD_URL = 'https://app.metrxbot.com/settings/budgets';
+
+/**
+ * Budget WRITES need admin authority (round 9, D5). POST/PATCH /api/budgets and
+ * /resume call requireAdmin. Since W1-4b that admits an API key carrying the
+ * 'admin' scope (minted by an org owner/admin in Settings → Security → API
+ * Keys) as well as an owner/admin session; any other key gets 403 with an
+ * insufficient_scope body, which the client turns into a sentence naming the
+ * required scope. On 403 the tools pass that sentence through and add where
+ * else the change can be made.
+ */
+const BUDGET_WRITE_REQUIREMENT =
+  "Changing a budget needs an API key with the 'admin' scope (an org owner or admin mints " +
+  'one in Settings → Security → API Keys) or an owner/admin in the dashboard.';
+
+/**
+ * soft_block and hard_block are enforced ONLY at the Metrx gateway (the proxy):
+ * the gateway reads budget state that the app syncs to it through Cloudflare.
+ * Traffic reported by the SDK or OTel never passes the gateway, so no budget
+ * mode can block it. While the app's Cloudflare settings for that sync are
+ * unset, the server refuses soft_block / hard_block with
+ * 409 ENFORCEMENT_UNAVAILABLE (PR #481) instead of storing a mode that blocks
+ * nothing. Tool descriptions and errors say exactly that.
+ */
+export const GATEWAY_ONLY_ENFORCEMENT =
+  '"soft_block" and "hard_block" act only on LLM calls routed through the Metrx gateway ' +
+  '(proxy); calls reported by the SDK or OpenTelemetry are never blocked. They are ' +
+  "unavailable while the gateway's Cloudflare settings for budget sync are unset: the " +
+  'server then refuses them with 409 ENFORCEMENT_UNAVAILABLE and only "alert_only" works.';
+
+export const ENFORCEMENT_UNAVAILABLE_NEXT_STEP =
+  'soft_block and hard_block are unavailable here: they act only on traffic through the ' +
+  "Metrx gateway, and the gateway's Cloudflare budget-sync settings are not configured on " +
+  'this deployment. Nothing was changed. Use enforcement_mode "alert_only" (works now), ' +
+  'or ask the Metrx operator to configure gateway enforcement.';
+
+function budgetWriteError(action: string, result: { error?: string; status?: number }) {
+  if (result.status === 409 && (result.error ?? '').includes('ENFORCEMENT_UNAVAILABLE')) {
+    return {
+      content: [
+        {
+          type: 'text' as const,
+          text: `${action} was refused (409 ENFORCEMENT_UNAVAILABLE): ${ENFORCEMENT_UNAVAILABLE_NEXT_STEP} Server said: ${result.error}`,
+        },
+      ],
+      isError: true,
+    };
+  }
+  const text =
+    result.status === 403
+      ? `${action} was refused (403): ${result.error ?? 'forbidden'} ${BUDGET_WRITE_REQUIREMENT} ` +
+        `Dashboard: ${BUDGETS_DASHBOARD_URL}.`
+      : `Error ${action.toLowerCase()}: ${result.error}`;
+  return { content: [{ type: 'text' as const, text }], isError: true };
+}
 
 export function registerBudgetTools(server: McpServer, client: MetrxApiClient): void {
   // ── get_budget_status ──
@@ -21,7 +79,8 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
         'Get the current status of all budget configurations. ' +
         'Shows spending vs limits, warning/exceeded counts, and enforcement modes. ' +
         'Use this to monitor spending governance across your agent fleet. ' +
-        'Do NOT use for creating/changing budgets — use set_budget or update_budget_mode.',
+        'Read-only. Budget changes (set_budget, update_budget_mode) need an API key with the ' +
+        "'admin' scope.",
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -55,9 +114,12 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
       title: 'Set Budget',
       description:
         'Create or update a budget configuration for an agent or the entire organization. ' +
-        'Budgets enforce spending limits with configurable enforcement modes: ' +
-        '"alert_only" (notify but don\'t block), "soft_block" (block with override), ' +
-        'or "hard_block" (strict enforcement). Specify limits in dollars. ' +
+        'Enforcement modes: "alert_only" (notify, never block), "soft_block" (block with ' +
+        'override) and "hard_block" (block). ' +
+        GATEWAY_ONLY_ENFORCEMENT +
+        ' Specify limits in dollars. ' +
+        "Needs an API key with the 'admin' scope (an org owner or admin mints one in Settings → " +
+        `Security → API Keys); any other key is refused with 403 — then make the change at ${BUDGETS_DASHBOARD_URL}. ` +
         'Do NOT use just to change enforcement mode — use update_budget_mode for that.',
       inputSchema: {
         agent_id: z
@@ -80,7 +142,9 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
         enforcement_mode: z
           .enum(['alert_only', 'soft_block', 'hard_block'])
           .default('alert_only')
-          .describe('How to enforce the budget when exceeded'),
+          .describe(
+            'How to enforce the budget when exceeded. soft_block/hard_block: gateway traffic only; 409 ENFORCEMENT_UNAVAILABLE while gateway enforcement is not configured'
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -90,10 +154,8 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
       },
     },
     async ({ agent_id, period, limit_dollars, warning_pct, enforcement_mode }) => {
-      // Convert dollars to microcents.
-      // Convention: 1 cent = 10,000 microcents → 1 dollar = 1,000,000 microcents.
-      // Source of truth: apps/gateway/src/cost.ts.
-      const limit_microcents = Math.round(limit_dollars * 1_000_000);
+      // limit_microcents holds MICRO-DOLLARS (services/units.ts) — 100x too large until round 8.
+      const limit_microcents = dollarsToMicrodollars(limit_dollars);
 
       const body: Record<string, unknown> = {
         period,
@@ -105,12 +167,7 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
 
       const result = await client.post<BudgetConfig>('/budgets', body);
 
-      if (result.error) {
-        return {
-          content: [{ type: 'text', text: `Error setting budget: ${result.error}` }],
-          isError: true,
-        };
-      }
+      if (result.error) return budgetWriteError('Setting budget', result);
 
       const b = result.data!;
       const scope = b.agent_id ? `agent ${b.agent_id}` : 'organization';
@@ -134,17 +191,28 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
     {
       title: 'Update Budget Mode',
       description:
-        'Change the enforcement mode of an existing budget or pause/resume it. ' +
+        'Change the enforcement mode of an existing budget, pause it, or ask to resume it. ' +
         'Use "alert_only" for monitoring, "soft_block" for overridable limits, ' +
-        'or "hard_block" for strict enforcement. ' +
+        'or "hard_block" to block. ' +
+        GATEWAY_ONLY_ENFORCEMENT +
+        ' ' +
+        "Needs an API key with the 'admin' scope (an org owner or admin mints one in Settings → " +
+        `Security → API Keys); any other key is refused with 403 — then make the change at ${BUDGETS_DASHBOARD_URL}. ` +
         'Do NOT use to create new budgets — use set_budget for that.',
       inputSchema: {
         budget_id: z.string().uuid().describe('The budget configuration ID to update'),
         enforcement_mode: z
           .enum(['alert_only', 'soft_block', 'hard_block'])
           .optional()
-          .describe('New enforcement mode'),
-        paused: z.boolean().optional().describe('Set to true to pause the budget, false to resume'),
+          .describe(
+            'New enforcement mode. soft_block/hard_block: gateway traffic only; 409 ENFORCEMENT_UNAVAILABLE while gateway enforcement is not configured'
+          ),
+        paused: z
+          .boolean()
+          .optional()
+          .describe(
+            'true pauses the budget; false resumes it (refused while a hard_block budget is still at its limit for the period — raise the limit first)'
+          ),
       },
       annotations: {
         readOnlyHint: false,
@@ -154,11 +222,7 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
       },
     },
     async ({ budget_id, enforcement_mode, paused }) => {
-      const body: Record<string, unknown> = {};
-      if (enforcement_mode !== undefined) body.enforcement_mode = enforcement_mode;
-      if (paused !== undefined) body.paused = paused;
-
-      if (Object.keys(body).length === 0) {
+      if (enforcement_mode === undefined && paused === undefined) {
         return {
           content: [
             { type: 'text', text: 'No changes specified. Provide enforcement_mode or paused.' },
@@ -167,19 +231,39 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
         };
       }
 
-      const result = await client.patch<BudgetConfig>(`/budgets/${budget_id}`, body);
+      // PATCH /budgets/{id} accepts `paused: true` only. Resuming goes through
+      // POST /budgets/{id}/resume, which refuses (409) a hard_block still over its
+      // limit — until round 8 this tool sent `paused:false` to PATCH, where it was
+      // dropped, and still reported "status → active".
+      const patchBody: Record<string, unknown> = {};
+      if (enforcement_mode !== undefined) patchBody.enforcement_mode = enforcement_mode;
+      if (paused === true) patchBody.paused = true;
 
-      if (result.error) {
-        return {
-          content: [{ type: 'text', text: `Error updating budget: ${result.error}` }],
-          isError: true,
-        };
+      const parts: string[] = ['✅ Budget updated:'];
+      if (Object.keys(patchBody).length > 0) {
+        const result = await client.patch<BudgetConfig>(`/budgets/${budget_id}`, patchBody);
+        if (result.error) return budgetWriteError('Updating budget', result);
+        if (enforcement_mode) parts.push(`enforcement → ${enforcement_mode}`);
+        if (paused === true) parts.push('status → paused');
       }
 
-      const _b = result.data!;
-      const parts: string[] = ['✅ Budget updated:'];
-      if (enforcement_mode) parts.push(`enforcement → ${enforcement_mode}`);
-      if (paused !== undefined) parts.push(paused ? 'status → paused' : 'status → active');
+      if (paused === false) {
+        const resumed = await client.post<BudgetConfig>(`/budgets/${budget_id}/resume`, {});
+        if (
+          resumed.error &&
+          (resumed.status === 403 || resumed.error.includes('ENFORCEMENT_UNAVAILABLE'))
+        ) {
+          return budgetWriteError('Resuming budget', resumed);
+        }
+        if (resumed.error) {
+          const done = parts.length > 1 ? ` (${parts.slice(1).join(', ')} was applied)` : '';
+          return {
+            content: [{ type: 'text', text: `Error resuming budget${done}: ${resumed.error}` }],
+            isError: true,
+          };
+        }
+        parts.push('status → active');
+      }
 
       return {
         content: [{ type: 'text', text: parts.join(', ') }],

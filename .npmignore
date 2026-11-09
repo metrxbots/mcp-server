@@ -1,0 +1,14 @@
+# Test files should never ship in the npm tarball
+**/*.test.*
+**/__tests__/**
+**/*.spec.*
+
+# Source files (dist/ is the published output)
+src/
+
+# Config files
+tsconfig.json
+vitest.config.*
+.eslintrc.*
+smithery.yaml
+PUBLISH.md

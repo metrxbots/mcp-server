@@ -41,7 +41,7 @@ export function registerDashboardTools(server: McpServer, client: MetrxApiClient
     },
     async ({ period_days }) => {
       const result = await client.get<DashboardSummary>('/dashboard', {
-        period_days: period_days ?? 30,
+        days: period_days ?? 30,
       });
 
       if (result.error) {
@@ -91,7 +91,7 @@ export function registerDashboardTools(server: McpServer, client: MetrxApiClient
       if (status) params.status = status;
       if (category) params.category = category;
 
-      const result = await client.get<{ agents: AgentDetail[] }>('/agents', params);
+      const result = await client.get<AgentDetail[] | { agents: AgentDetail[] }>('/agents', params);
 
       if (result.error) {
         return {
@@ -100,7 +100,9 @@ export function registerDashboardTools(server: McpServer, client: MetrxApiClient
         };
       }
 
-      const agents = result.data?.agents || [];
+      // API returns array directly; demo client wraps in { agents: [] }
+      const raw = result.data;
+      const agents: AgentDetail[] = Array.isArray(raw) ? raw : raw?.agents || [];
       if (agents.length === 0) {
         return {
           content: [{ type: 'text', text: 'No agents found matching the specified filters.' }],
@@ -109,17 +111,8 @@ export function registerDashboardTools(server: McpServer, client: MetrxApiClient
 
       const lines: string[] = [`## Agents (${agents.length})`, ''];
       for (const agent of agents) {
-        const cost =
-          typeof agent.monthly_cost_cents === 'number' && agent.monthly_cost_cents > 0
-            ? formatCents(agent.monthly_cost_cents)
-            : 'N/A';
-        // number → multiple; null → "no attributed revenue"; absent (plan omits it) → nothing.
-        const roi =
-          typeof agent.roi_multiplier === 'number'
-            ? ` | ${agent.roi_multiplier.toFixed(1)}x attributed revenue multiple`
-            : agent.roi_multiplier === null
-              ? ' | no attributed revenue'
-              : '';
+        const cost = agent.monthly_cost_cents ? formatCents(agent.monthly_cost_cents) : 'N/A';
+        const roi = agent.roi_multiplier ? ` | ${agent.roi_multiplier.toFixed(1)}x ROI` : '';
         lines.push(
           `- **${agent.name}** [${agent.agent_key}] — ${agent.status} | ${agent.category} | ${cost}/mo${roi}`
         );

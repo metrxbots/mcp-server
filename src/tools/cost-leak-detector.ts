@@ -56,8 +56,8 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
         `cross-provider arbitrage opportunities (covers ${getCoveredProviders().join(', ')}). ` +
         'Returns a scored report with fix recommendations and estimated monthly savings. ' +
         'Supports output_format="json" for machine-readable output in CI/CD pipelines. ' +
-        'Do NOT use as a continuous monitoring loop — use configure_alert_threshold for ongoing monitoring. ' +
-        'Do NOT use for fixing leaks — use apply_optimization for one-click fixes.',
+        'Do NOT use as a continuous monitoring loop — use get_alerts and get_failure_predictions for ongoing monitoring. ' +
+        'Read-only: it changes nothing. To act on a finding, use get_optimization_recommendations or create_model_experiment.',
       inputSchema: {
         agent_id: z
           .string()
@@ -237,7 +237,9 @@ function formatCostLeakReport(report: CostLeakReport, includeLow: boolean): stri
     lines.push(
       `Auto-fixable: ${autoFixable.length} findings worth ${formatCents(autoFixSavings)}/month`
     );
-    lines.push('Use apply_optimization to auto-fix these issues.');
+    lines.push(
+      'Use get_optimization_recommendations for details, or create_model_experiment to test a cheaper model.'
+    );
   }
 
   // Upgrade CTA — drives CLI users to the full platform
@@ -247,7 +249,7 @@ function formatCostLeakReport(report: CostLeakReport, includeLow: boolean): stri
   lines.push('### 📊 Want continuous monitoring?');
   lines.push(
     'This scan is a one-time snapshot. Metrx gives you **real-time cost tracking**, ' +
-    'automatic alerts when spend spikes, and per-agent ROI attribution.'
+      'automatic alerts when spend spikes, and per-agent ROI attribution.'
   );
   lines.push('');
 
@@ -255,7 +257,7 @@ function formatCostLeakReport(report: CostLeakReport, includeLow: boolean): stri
   if (wasteDollars >= 100) {
     lines.push(
       `You\'re leaving ~$${Math.round(wasteDollars)}/mo on the table. ` +
-      'Metrx pays for itself in the first week.'
+        'Metrx pays for itself in the first week.'
     );
     lines.push('');
   }

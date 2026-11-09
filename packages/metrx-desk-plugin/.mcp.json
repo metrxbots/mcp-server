@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "metrx": {
+      "type": "http",
+      "url": "${METRX_MCP_URL:-https://metrxbot.com/api/mcp}?set=workforce",
+      "headers": {
+        "Authorization": "Bearer ${METRX_API_KEY:-}"
+      }
+    }
+  }
+}

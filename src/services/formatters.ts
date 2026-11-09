@@ -10,42 +10,28 @@ import type {
   BudgetStatus,
   BudgetSummary,
   OptimizationResult,
+  FleetSuggestionsResult,
   OptimizationSuggestion,
   AgentDetail,
   AlertEvent,
   FailurePrediction,
   ModelRoutingExperiment,
 } from '../types.js';
+import { microdollarsToDollars } from './units.js';
 
 /** Format cents as dollar string */
 export function formatCents(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
 }
 
-/** Format microcents as dollar string.
- *  Convention: 1 cent = 10,000 microcents → 1 dollar = 1,000,000 microcents.
- *  Source of truth: apps/gateway/src/cost.ts and apps/web/lib/customers/customer-costs.ts. */
+/** Format a `*_microcents` value (MICRO-DOLLARS — see services/units.ts) as a dollar string */
 export function formatMicrocents(microcents: number): string {
-  return `$${(microcents / 1_000_000).toFixed(2)}`;
+  return `$${microdollarsToDollars(microcents).toFixed(2)}`;
 }
 
 /** Format a percentage */
 export function formatPct(value: number, decimals: number = 1): string {
   return `${(value * 100).toFixed(decimals)}%`;
-}
-
-/**
- * Attribution fields from the Metrx API have three states (see AgentSummary):
- * a number, null (on the plan, nothing attributed) or absent (not on the plan).
- * This is the one place the per-agent multiple is worded; it matches the hosted
- * MCP (agentledger packages/mcp-server/src/services/formatters.ts).
- *
- * Returns the suffix to append to an agent line ('' when the plan omits it).
- */
-export function formatAgentMultipleSuffix(roi: number | null | undefined): string {
-  if (typeof roi === 'number') return `, ${roi.toFixed(1)}x attributed revenue multiple`;
-  if (roi === null) return ', no attributed revenue';
-  return '';
 }
 
 /** Format dashboard summary for LLM consumption */
@@ -63,16 +49,14 @@ export function formatDashboard(data: DashboardSummary): string {
     const a = data.attribution;
     lines.push('');
     lines.push('### Revenue Attribution');
-    if (typeof a.total_outcomes === 'number') {
-      lines.push(`**Attributed Outcomes**: ${a.total_outcomes}`);
-    }
-    // Summary-only plans carry the count and no money: say so, never "$NaN" or $0.
+    lines.push(`**Attributed Outcomes**: ${a.total_outcomes}`);
+    // Summary-only plans carry the count and no money: say so, never "$NaN"/$0.
     if (typeof a.total_revenue_cents === 'number') {
       lines.push(`**Attributed Revenue**: ${formatCents(a.total_revenue_cents)}`);
       if (typeof a.net_value_cents === 'number') {
         lines.push(`**Net Value**: ${formatCents(a.net_value_cents)}`);
       }
-      const roi = typeof a.roi_multiplier === 'number' ? a.roi_multiplier : null;
+      const roi = a.roi_multiplier ?? null;
       lines.push(
         `**Attributed revenue multiple**: ${
           roi === null ? 'n/a (no attributed revenue or no cost)' : `${roi.toFixed(1)}x`
@@ -80,8 +64,6 @@ export function formatDashboard(data: DashboardSummary): string {
       );
     } else if (a.upgrade_hint) {
       lines.push(`*${a.upgrade_hint}*`);
-    } else {
-      lines.push('*Your plan does not include attributed revenue.*');
     }
   }
 
@@ -102,10 +84,18 @@ export function formatDashboard(data: DashboardSummary): string {
     lines.push('### Agent Breakdown');
     for (const agent of data.agents_list) {
       const cost =
-        typeof agent.monthly_cost_cents === 'number' ? formatCents(agent.monthly_cost_cents) : 'N/A';
-      // Absent roi_multiplier = "not on this plan" (no text), null = "no attributed revenue".
-      const roi = formatAgentMultipleSuffix(agent.roi_multiplier);
-      lines.push(`- **${agent.name}** (${agent.status}): ${cost}/mo${roi}`);
+        typeof agent.monthly_cost_cents === 'number'
+          ? formatCents(agent.monthly_cost_cents)
+          : 'n/a';
+      // The /dashboard API omits roi_multiplier on plans without full
+      // attribution: absent is "not on this plan", not "no attributed revenue".
+      const roi =
+        typeof agent.roi_multiplier === 'number'
+          ? `, ${agent.roi_multiplier.toFixed(1)}x attributed revenue multiple`
+          : agent.roi_multiplier === null
+            ? ', no attributed revenue'
+            : '';
+      lines.push(`- **${agent.name}** (${agent.status}): ${cost} in period${roi}`);
     }
   }
 
@@ -113,13 +103,36 @@ export function formatDashboard(data: DashboardSummary): string {
 }
 
 /** Format optimization recommendations */
+/** Savings money: null (no figure under the current definition) is "—", never $0.00. */
+export function formatSavings(cents: number | null | undefined): string {
+  return cents === null || cents === undefined ? '—' : formatCents(cents);
+}
+
+/** Why a stored savings row has no total (savings definition v2). */
+export function staleSavingsText(reason: string | null | undefined): string {
+  return reason === 'no_recent_activity'
+    ? 'No activity in the last 30 days — no current savings estimate.'
+    : 'Savings estimate recalculating on the next optimization run.';
+}
+
 export function formatOptimizations(result: OptimizationResult): string {
-  const lines: string[] = [
-    `## Optimization Recommendations`,
-    '',
-    `**Total Potential Savings**: ${formatCents(result.total_monthly_savings_cents)}/month`,
-    `**Suggestions**: ${result.suggestion_count}`,
-  ];
+  const stale = result.status === 'stale_definition' || result.total_monthly_savings_cents === null;
+  const lines: string[] = [`## Optimization Recommendations`, ''];
+  if (stale) {
+    lines.push(`**Total Potential Savings**: — (${staleSavingsText(result.stale_reason)})`);
+    return lines.join('\n');
+  }
+  const spend = result.measured_window_spend_cents;
+  const basis =
+    typeof spend === 'number'
+      ? result.savings_bound_applied
+        ? ` (Estimate · capped at ${formatCents(spend)} measured spend)`
+        : ` (Estimate · bounded by ${formatCents(spend)} measured spend)`
+      : ' (Estimate)';
+  lines.push(
+    `**Total Potential Savings**: ${formatSavings(result.total_monthly_savings_cents)}/month${basis}`,
+    `**Suggestions**: ${result.suggestion_count}`
+  );
 
   if (result.analysis_confidence) {
     lines.push(
@@ -129,36 +142,74 @@ export function formatOptimizations(result: OptimizationResult): string {
     );
   }
 
-  if (result.suggestions.length > 0) {
-    lines.push('');
+  appendSuggestionSections(lines, result.suggestions);
+  return lines.join('\n');
+}
 
-    // Separate cost and revenue suggestions
-    const costSuggestions = result.suggestions.filter((s) => !s.is_revenue);
-    const revenueSuggestions = result.suggestions.filter((s) => s.is_revenue);
-
-    if (costSuggestions.length > 0) {
-      lines.push('### Cost Optimization');
-      for (const s of costSuggestions) {
-        lines.push(formatSuggestion(s));
-      }
-    }
-
-    if (revenueSuggestions.length > 0) {
-      lines.push('');
-      lines.push('### Revenue Intelligence');
-      for (const s of revenueSuggestions) {
-        lines.push(formatSuggestion(s));
-      }
-    }
+function appendSuggestionSections(lines: string[], suggestions: OptimizationSuggestion[]): void {
+  if (suggestions.length === 0) return;
+  lines.push('');
+  const costSuggestions = suggestions.filter((s) => !s.is_revenue);
+  const revenueSuggestions = suggestions.filter((s) => s.is_revenue);
+  if (costSuggestions.length > 0) {
+    lines.push('### Cost Optimization');
+    for (const s of costSuggestions) lines.push(formatSuggestion(s));
   }
+  if (revenueSuggestions.length > 0) {
+    lines.push('');
+    lines.push('### Revenue Intelligence');
+    for (const s of revenueSuggestions) lines.push(formatSuggestion(s));
+  }
+}
 
+/**
+ * Fleet view (GET /dashboard/suggestions). The total is the route's Σ of every
+ * agent's current stored total — the same per-agent figures the fleet card
+ * shows — never a re-sum of the listed (top-N) suggestions.
+ */
+export function formatFleetOptimizations(result: FleetSuggestionsResult): string {
+  const lines: string[] = [`## Fleet Optimization Recommendations`, ''];
+  const total = result.total_savings_cents ?? null;
+  lines.push(
+    total === null
+      ? `**Total Potential Savings**: — (no agent has a current savings estimate)`
+      : `**Total Potential Savings**: ${formatCents(total)}/month (Estimate, sum of each agent's spend-bounded estimate)`
+  );
+  const recalculating = result.recalculating_agent_count ?? 0;
+  const idle = result.idle_stale_agent_count ?? 0;
+  if (recalculating > 0) {
+    lines.push(
+      `${recalculating} agent${recalculating === 1 ? '' : 's'} recalculating — not included until the next optimization run.`
+    );
+  }
+  if (idle > 0) {
+    lines.push(
+      `${idle} agent${idle === 1 ? '' : 's'} with no activity in the last 30 days — no current estimate.`
+    );
+  }
+  if (result.tier_limited) {
+    // Blurred tier: the route zeroes per-suggestion amounts as a placeholder;
+    // printing them would render an unknown as $0.00.
+    lines.push(
+      `${result.suggestion_count ?? result.suggestions.length} suggestion(s) available; details are limited on this tier.`
+    );
+    return lines.join('\n');
+  }
+  const named = result.suggestions.map((s) =>
+    s.agent_name ? { ...s, title: `[${s.agent_name}] ${s.title}` } : s
+  );
+  appendSuggestionSections(lines, named);
   return lines.join('\n');
 }
 
 function formatSuggestion(s: OptimizationSuggestion): string {
   const impact = s.is_revenue
     ? `+${formatCents(s.impact_monthly_cents)}/mo revenue`
-    : `${formatCents(s.impact_monthly_cents)}/mo savings`;
+    : `${formatCents(s.impact_monthly_cents)}/mo savings (Estimate)${
+        s.excluded_from_total_reason
+          ? ` — not counted in the total: ${s.excluded_from_total_reason}`
+          : ''
+      }`;
 
   const parts = [
     `\n**${s.title}** (${s.confidence} confidence)`,
@@ -168,10 +219,6 @@ function formatSuggestion(s: OptimizationSuggestion): string {
 
   if (s.caveat) {
     parts.push(`⚠️ ${s.caveat}`);
-  }
-
-  if (s.implementation?.one_click) {
-    parts.push(`✅ One-click apply available`);
   }
 
   return parts.join('\n');
@@ -207,10 +254,10 @@ function formatBudget(b: BudgetSummary): string {
   const status = b.over_limit
     ? '🔴 EXCEEDED'
     : b.over_warning
-    ? '🟡 WARNING'
-    : b.paused
-    ? '⏸️ PAUSED'
-    : '🟢 OK';
+      ? '🟡 WARNING'
+      : b.paused
+        ? '⏸️ PAUSED'
+        : '🟢 OK';
   const spent = formatMicrocents(b.spent_microcents);
   const limit = formatMicrocents(b.limit_microcents);
 
@@ -276,20 +323,37 @@ export function formatAlerts(alerts: AlertEvent[]): string {
   return lines.join('\n');
 }
 
-/** Format failure predictions */
-export function formatPredictions(predictions: FailurePrediction[]): string {
+/** Format failure predictions for one agent (GET /agents/{id}/optimization/predictions) */
+export function formatPredictions(
+  predictions: FailurePrediction[],
+  context?: { agent_id?: string; event_count?: number; computed_at?: string }
+): string {
+  const header: string[] = [];
+  if (context?.agent_id) header.push(`Agent: ${context.agent_id}`);
+  if (context?.event_count !== undefined) {
+    header.push(`Calls analyzed (last 7 days): ${context.event_count}`);
+  }
+  if (context?.computed_at) header.push(`Computed: ${context.computed_at}`);
+
   if (predictions.length === 0) {
-    return 'No active failure predictions. All agents are healthy.';
+    const lines = ['No failure predictions for this agent.', ...header];
+    if (context?.event_count !== undefined && context.event_count < 20) {
+      lines.push(
+        'Predictions need at least 20 calls in the last 7 days, so an empty result here means ' +
+          'too little data, not a clean bill of health.'
+      );
+    }
+    return lines.join('\n');
   }
 
-  const lines: string[] = [`## Failure Predictions (${predictions.length})`, ''];
+  const lines: string[] = [`## Failure Predictions (${predictions.length})`, ...header, ''];
 
   for (const p of predictions) {
     const icon = p.severity === 'critical' ? '🔴' : p.severity === 'warning' ? '🟡' : 'ℹ️';
     lines.push(
-      `${icon} **${p.prediction_type}** — ${p.severity} (${formatPct(p.confidence)} confidence)`
+      `${icon} **${p.prediction_type}** — ${p.severity} (${formatPct(p.confidence)} confidence, ` +
+        `${p.prediction_horizon_hours}h horizon)`
     );
-    lines.push(`  Agent: ${p.agent_id}`);
     lines.push(
       `  Current: ${p.current_value.toFixed(2)} → Threshold: ${p.threshold_value.toFixed(2)} (${
         p.trend_direction
@@ -297,6 +361,12 @@ export function formatPredictions(predictions: FailurePrediction[]): string {
     );
     if (p.predicted_breach_at) {
       lines.push(`  Predicted breach: ${p.predicted_breach_at}`);
+    }
+    if (p.contributing_factors && p.contributing_factors.length > 0) {
+      lines.push('  Contributing factors:');
+      for (const f of p.contributing_factors) {
+        lines.push(`    - ${f.factor}: ${f.description}`);
+      }
     }
     if (p.recommended_actions.length > 0) {
       lines.push('  Recommended actions:');
@@ -310,22 +380,27 @@ export function formatPredictions(predictions: FailurePrediction[]): string {
   return lines.join('\n');
 }
 
-/** Format model routing experiment */
+/** Format one model_routing_experiments row */
 export function formatExperiment(exp: ModelRoutingExperiment): string {
   const lines: string[] = [
     `## Experiment: ${exp.name}`,
     '',
+    `**ID**: ${exp.id}`,
     `**Status**: ${exp.status}`,
-    `**Control**: ${exp.control_model} (${exp.control_samples} samples)`,
-    `**Treatment**: ${exp.treatment_model} (${exp.treatment_samples} samples)`,
+    `**Control**: ${exp.control_model} (${exp.control_samples ?? 0} samples)`,
+    `**Treatment**: ${exp.treatment_model} (${exp.treatment_samples ?? 0} samples)`,
     `**Traffic Split**: ${exp.traffic_pct}% to treatment`,
     `**Primary Metric**: ${exp.primary_metric}`,
-    `**Significant**: ${exp.is_significant ? 'Yes' : 'Not yet'}`,
+    `**Significant**: ${exp.is_significant ? 'Yes' : 'Not yet'}${
+      typeof exp.p_value === 'number' ? ` (p = ${exp.p_value.toFixed(4)})` : ''
+    }`,
   ];
 
   if (exp.winner) {
     lines.push(`**Winner**: ${exp.winner}`);
   }
+  if (exp.started_at) lines.push(`**Started**: ${exp.started_at}`);
+  if (exp.completed_at) lines.push(`**Completed**: ${exp.completed_at}`);
 
   return lines.join('\n');
 }

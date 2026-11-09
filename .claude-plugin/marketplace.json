@@ -1,0 +1,27 @@
+{
+  "name": "metrxbots",
+  "owner": {
+    "name": "Metrx",
+    "url": "https://metrxbot.com"
+  },
+  "metadata": {
+    "description": "Metrx plugins for Claude Code: manage the AI agents your company employs.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "metrx-desk",
+      "source": "./packages/metrx-desk-plugin",
+      "description": "The Metrx manager's desk: workforce review with labelled numbers, job contracts, vendor bill check, weekly decisions. The sample review needs no account.",
+      "version": "0.1.0",
+      "author": {
+        "name": "Metrx",
+        "url": "https://metrxbot.com"
+      },
+      "homepage": "https://docs.metrxbot.com/desk",
+      "license": "MIT",
+      "keywords": ["ai-agents", "workforce", "cost", "job-contract", "mcp", "metrx"],
+      "category": "productivity"
+    }
+  ]
+}

@@ -8,6 +8,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 _No unreleased changes._
 
+## [0.5.0] - 2026-11-08
+
+This repository is now a source mirror of `packages/mcp-server` in the Metrx monorepo, which is the only source from this release on. Until 0.5.0 the two were maintained separately, and they drifted: npm had 23 tools and the hosted server had 29.
+
+### Added
+- **Manager's desk tools.** `metrx_get_workforce_review`, `metrx_draft_job_contract` and `metrx_check_vendor_bill` work without an API key, and the workforce review uses `org=demo` for the public Northwind sample. With a key, `org=me` reads your own org, and `metrx_record_decision` puts a decision on record.
+- **The tools the hosted server already had**, now in the npm package as well: `metrx_get_decision_queue`, `metrx_get_scorecard`, `metrx_get_job_contract`, `metrx_set_job_contract`, `metrx_get_verdicts`, `metrx_get_trials`, `metrx_get_proposals`, `metrx_get_actuations`, `metrx_get_signal_readiness`, `metrx_get_dashboard_headline`, `metrx_get_report_snapshot`, `metrx_kb_prior_lookup`, `metrx_get_health_scores`, `metrx_get_rankings`, `metrx_get_balance`, `metrx_buy_verification`, `metrx_verify_switch`, `metrx_get_upgrade_business_case`.
+- **The `metrx-desk` plugin** for Claude Code and Codex, under `packages/metrx-desk-plugin`, with marketplace manifests in `.claude-plugin/` and `.agents/plugins/`.
+- **One error table.** Desk errors reach the client as JSON-RPC errors `-32001` to `-32008`, each with a recovery step.
+
+### Changed
+- `@modelcontextprotocol/sdk` is now ^1.32.1.
+- **Without an API key, the server lists only the three keyless desk tools.** The old offline demo client, which answered 23 tools with fixtures, is removed. Use `org=demo` on the workforce review for a sample.
+
+### Removed
+- `metrx_apply_optimization`, `metrx_compare_models`, `metrx_configure_alert_threshold` and `metrx_route_model` are no longer in the package. The hosted server had already dropped them.
+- Source files the monorepo does not have: `src/auth/oauth-dcr.ts`, `src/services/demo-client.ts`, `src/tools/alert-config.ts`, and their tests.
+
 ## [0.2.7] - 2026-10-13
 
 ### Removed

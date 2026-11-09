@@ -18,9 +18,22 @@ const createMockServer = () => ({
   registerTool: vi.fn(),
 });
 
-const createMockClient = () =>
+/**
+ * GET /dashboard is answered per test (mockResolvedValueOnce, first call). The
+ * savings figure comes from GET /dashboard/suggestions — /dashboard never
+ * returned an `optimization` block, which is why these tools printed $0.00.
+ */
+const createMockClient = (
+  suggestions: Record<string, unknown> = {
+    total_savings_cents: 3000,
+    suggestion_count: 4,
+    suggestions: [],
+  }
+) =>
   ({
-    get: vi.fn(),
+    get: vi.fn(async (path: string) =>
+      path === '/dashboard/suggestions' ? { data: suggestions } : { error: `unmocked ${path}` }
+    ),
   }) as unknown as MetrxApiClient;
 
 describe('Upgrade Justification Tools Registration', () => {
@@ -100,7 +113,7 @@ describe('get_upgrade_justification Handler', () => {
     expect(mockClient.get).toHaveBeenCalledWith(
       '/dashboard',
       expect.objectContaining({
-        period_days: 30,
+        days: 30,
       })
     );
   });
@@ -126,7 +139,7 @@ describe('get_upgrade_justification Handler', () => {
     expect(mockClient.get).toHaveBeenCalledWith(
       '/dashboard',
       expect.objectContaining({
-        period_days: 60,
+        days: 60,
       })
     );
   });
@@ -177,7 +190,7 @@ describe('get_upgrade_justification Handler', () => {
 
     expect(result.content[0].type).toBe('text');
     const text = result.content[0].text;
-    expect(text).toContain('Consider Lite');
+    expect(text).toContain('Consider Verify');
     expect(text).toContain('75,000');
   });
 
@@ -201,8 +214,8 @@ describe('get_upgrade_justification Handler', () => {
 
     expect(result.content[0].type).toBe('text');
     const text = result.content[0].text;
-    expect(text).toContain('Not Yet Recommended');
-    expect(text).toContain('Free tier is sufficient');
+    expect(text).toContain('Not Yet');
+    expect(text).toContain('free tier is sufficient');
   });
 
   it('should include current tier information in response', async () => {
@@ -252,7 +265,7 @@ describe('get_upgrade_justification Handler', () => {
     expect(text).toContain('suggestions');
   });
 
-  it('should include Lite tier benefits in response', async () => {
+  it('should include the Verify + Platform offers in response', async () => {
     (mockClient.get as any).mockResolvedValueOnce({
       data: {
         agents: { active: 5, total: 10 },
@@ -271,9 +284,12 @@ describe('get_upgrade_justification Handler', () => {
     const result = await upgradeHandler({ period_days: 30 });
 
     const text = result.content[0].text;
-    expect(text).toContain('Upgrade Benefits');
-    expect(text).toContain('Advanced optimization');
-    expect(text).toContain('Real-time failure prediction');
+    expect(text).toContain('How Metrx is priced');
+    expect(text).toContain('Verify');
+    expect(text).toContain('Platform');
+    // Retired legacy prices must not appear.
+    expect(text).not.toContain('$19/month');
+    expect(text).not.toContain('$49/month');
   });
 
   it('should include ROI projection in response', async () => {
@@ -295,8 +311,8 @@ describe('get_upgrade_justification Handler', () => {
     const result = await upgradeHandler({ period_days: 30 });
 
     const text = result.content[0].text;
-    expect(text).toContain('ROI Projection');
-    expect(text).toContain('Lite Tier Subscription');
+    expect(text).toContain('The opportunity');
+    expect(text).toContain('Verify');
   });
 
   it('should handle missing optimization data gracefully', async () => {
@@ -396,7 +412,7 @@ describe('get_upgrade_justification Handler', () => {
 
     expect(result.content).toBeDefined();
     const text = result.content[0].text;
-    expect(text).toContain('Not Yet Recommended');
+    expect(text).toContain('Not Yet');
   });
 
   it('should include error rate in response', async () => {
@@ -474,5 +490,46 @@ describe('Input Validation for get_upgrade_justification', () => {
 
     expect(schema.period_days.description).toBeDefined();
     expect(schema.period_days.description).toContain('days');
+  });
+});
+
+// Savings definition v2 / W4 (plan 2026-10-12): the savings line read
+// `summary.optimization?.total_savings_cents || 0`, a field GET /dashboard never
+// returns, so every org saw "$0.00". It must read the stored total from
+// GET /dashboard/suggestions, unscaled (it is already monthly), and say
+// "not available" — never $0.00 — when there is none.
+describe('get_upgrade_justification savings source (W4 regression)', () => {
+  const dash = {
+    period_days: 30,
+    agents: { active: 3, total: 4 },
+    cost: { total_calls: 150000, total_cost_cents: 75000, error_rate: 0.01 },
+  };
+  const run = async (suggestions: Record<string, unknown>) => {
+    const server = createMockServer();
+    const client = createMockClient(suggestions);
+    (client.get as any).mockResolvedValueOnce({ data: dash });
+    registerUpgradeJustificationTools(server as any, client as any);
+    const h = (server.registerTool as any).mock.calls[0][2];
+    const out = await h({ period_days: 30 });
+    return { text: out.content[0].text as string, client };
+  };
+
+  it('shows the stored monthly total from /dashboard/suggestions, not $0.00', async () => {
+    const { text, client } = await run({ total_savings_cents: 4200, suggestion_count: 7 });
+    expect(client.get).toHaveBeenCalledWith('/dashboard/suggestions');
+    expect(text).toContain('$42.00/month');
+    expect(text).toContain('7 suggestions');
+    expect(text).not.toContain('$0.00');
+  });
+
+  it('says not available (with the reason) when no current total exists', async () => {
+    const { text } = await run({
+      total_savings_cents: null,
+      recalculating_agent_count: 2,
+      suggestions: [],
+    });
+    expect(text).toContain('not available');
+    expect(text).toContain('recalculated');
+    expect(text).not.toContain('$0.00');
   });
 });

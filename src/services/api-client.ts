@@ -8,6 +8,7 @@
  * or configured at runtime.
  */
 
+import { deskProblemFromBody } from '../errors.js';
 import { DEFAULT_API_URL, SERVER_NAME, SERVER_VERSION } from '../constants.js';
 import type { ApiResponse } from '../types.js';
 
@@ -23,15 +24,15 @@ export class MetrxApiClient {
 
   constructor(apiKey?: string, baseUrl?: string, maxRetries?: number) {
     this.apiKey = apiKey || process.env.METRX_API_KEY || '';
-    this.baseUrl = baseUrl || process.env.METRX_API_URL || DEFAULT_API_URL;
+    this.baseUrl = (baseUrl || process.env.METRX_API_URL || DEFAULT_API_URL).replace(/\/+$/, '');
     this.maxRetries = maxRetries ?? 3;
 
     if (!this.apiKey) {
       throw new Error(
         `METRX_API_KEY not set.\n` +
-        `  Sign up free: ${ONBOARD_URL}\n` +
-        `  Manage keys:  ${API_KEY_SETTINGS_URL}\n` +
-        `  Then test:    METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test`
+          `  Sign up free: ${ONBOARD_URL}\n` +
+          `  Manage keys:  ${API_KEY_SETTINGS_URL}\n` +
+          `  Then test:    METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server --test`
       );
     }
   }
@@ -65,6 +66,68 @@ export class MetrxApiClient {
 
       if (parsed.error?.message) {
         return `${parsed.error.message}. See ${API_DOCS_URL} for help`;
+      }
+
+      // W1-4b scoped API keys: a 403 whose body says exactly which scope the
+      // call needs. Name it — "check your API key permissions" sends the caller
+      // looking for a setting without saying which one.
+      if (parsed.error === 'insufficient_scope') {
+        const required =
+          typeof parsed.required_scope === 'string' ? parsed.required_scope : 'unknown';
+        const granted = Array.isArray(parsed.granted_scopes)
+          ? parsed.granted_scopes.join(', ')
+          : '';
+        const message = typeof parsed.message === 'string' ? ` ${parsed.message}` : '';
+        return (
+          `Insufficient API key scope: this call needs '${required}' (key holds [${granted}]).` +
+          `${message} An org owner or admin can mint a key with that scope at ${API_KEY_SETTINGS_URL}`
+        );
+      }
+
+      // Budgets (PR #481): soft_block / hard_block act only at the Metrx gateway,
+      // and the server refuses them (409) while the gateway's budget sync
+      // (its Cloudflare settings) is unconfigured. Keep the server's reason and
+      // the code, so a caller can tell this apart from a 409 "limit reached".
+      if (parsed.code === 'ENFORCEMENT_UNAVAILABLE') {
+        const reason =
+          typeof parsed.error === 'string' && parsed.error.trim()
+            ? parsed.error.trim()
+            : 'Gateway budget enforcement is not switched on.';
+        return `Budget enforcement unavailable (${status} ENFORCEMENT_UNAVAILABLE): ${reason}`;
+      }
+
+      // Routes that refuse API keys of every scope (requireSession).
+      if (parsed.error === 'session_required') {
+        const message =
+          typeof parsed.message === 'string'
+            ? parsed.message
+            : 'This endpoint requires a signed-in user.';
+        return `${message} API keys of any scope cannot call it — use the dashboard.`;
+      }
+
+      // Older routes answer with a plain-string error ("Admin access required",
+      // "Unknown agent_key ..."). Keep the server's words instead of replacing
+      // them with a generic status line; 400s also carry validation details[].
+      if (typeof parsed.error === 'string' && parsed.error.trim()) {
+        const details = Array.isArray(parsed.details)
+          ? parsed.details
+              .map((d: unknown) => (typeof d === 'string' ? d : JSON.stringify(d)))
+              .join('; ')
+          : '';
+        const reason = details ? `${parsed.error}: ${details}` : parsed.error;
+        switch (status) {
+          case 403:
+            return `Access forbidden (403): ${reason}`;
+          case 404:
+            // "not found" stays in the text: loop-metrics keys its flag-off copy on it.
+            return `Resource not found (404): ${reason}`;
+          case 400:
+          case 409:
+          case 422:
+            return `API request failed (${status}): ${reason}`;
+          default:
+            break; // 401/429/5xx keep their status-based guidance below
+        }
       }
     } catch {
       // Not JSON, use status-based messages
@@ -146,7 +209,7 @@ export class MetrxApiClient {
     path: string,
     params?: Record<string, string | number | boolean>
   ): Promise<ApiResponse<T>> {
-    const url = new URL(path, this.baseUrl);
+    const url = new URL(`${this.baseUrl}${path}`);
     if (params) {
       for (const [key, value] of Object.entries(params)) {
         if (value !== undefined && value !== null) {
@@ -164,8 +227,11 @@ export class MetrxApiClient {
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
         const friendlyMessage = this.parseApiError(response.status, errorBody);
+        const problem = deskProblemFromBody(errorBody);
         return {
           error: friendlyMessage,
+          status: response.status,
+          ...(problem ? { problem } : {}),
         };
       }
 
@@ -188,7 +254,7 @@ export class MetrxApiClient {
    * Make an authenticated POST request to the Metrx API.
    */
   async post<T>(path: string, body?: Record<string, unknown>): Promise<ApiResponse<T>> {
-    const url = new URL(path, this.baseUrl);
+    const url = new URL(`${this.baseUrl}${path}`);
 
     try {
       const response = await this.fetchWithRetry(url.toString(), {
@@ -200,8 +266,11 @@ export class MetrxApiClient {
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
         const friendlyMessage = this.parseApiError(response.status, errorBody);
+        const problem = deskProblemFromBody(errorBody);
         return {
           error: friendlyMessage,
+          status: response.status,
+          ...(problem ? { problem } : {}),
         };
       }
 
@@ -223,7 +292,7 @@ export class MetrxApiClient {
    * Make an authenticated PATCH request to the Metrx API.
    */
   async patch<T>(path: string, body?: Record<string, unknown>): Promise<ApiResponse<T>> {
-    const url = new URL(path, this.baseUrl);
+    const url = new URL(`${this.baseUrl}${path}`);
 
     try {
       const response = await this.fetchWithRetry(url.toString(), {
@@ -235,8 +304,11 @@ export class MetrxApiClient {
       if (!response.ok) {
         const errorBody = await response.text().catch(() => '');
         const friendlyMessage = this.parseApiError(response.status, errorBody);
+        const problem = deskProblemFromBody(errorBody);
         return {
           error: friendlyMessage,
+          status: response.status,
+          ...(problem ? { problem } : {}),
         };
       }
 
@@ -261,7 +333,7 @@ export class MetrxApiClient {
    * Returns { ok: true } on success, or { ok: false, error: string } on failure.
    */
   async ping(): Promise<{ ok: boolean; error?: string }> {
-    const url = new URL('/api/v1/agents', this.baseUrl);
+    const url = new URL(`${this.baseUrl}/agents`);
 
     try {
       const response = await this.fetchWithRetry(url.toString(), {
