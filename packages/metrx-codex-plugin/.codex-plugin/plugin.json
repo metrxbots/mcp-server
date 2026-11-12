@@ -1,0 +1,26 @@
+{
+  "name": "metrx",
+  "version": "0.1.0",
+  "description": "Manage the AI agents your company employs: workforce review, job contracts, bill checks. Sign in with your Metrx account.",
+  "author": {
+    "name": "Metrx",
+    "url": "https://metrxbot.com"
+  },
+  "homepage": "https://docs.metrxbot.com/connect",
+  "repository": "https://github.com/metrxbots/mcp-server",
+  "license": "MIT",
+  "keywords": ["ai-agents", "workforce", "cost", "job-contract", "mcp", "metrx"],
+  "mcpServers": "./.mcp.json",
+  "interface": {
+    "displayName": "Metrxbot",
+    "shortDescription": "Review the AI agents your company employs.",
+    "longDescription": "Connects Codex to your Metrx organisation over OAuth. Ask for the workforce review, an agent's scorecard or job contract, a vendor bill check, or record a decision on an agent. You sign in with your Metrx account; no API key is copied anywhere.",
+    "developerName": "Metrx",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://metrxbot.com",
+    "privacyPolicyURL": "https://metrxbot.com/privacy",
+    "termsOfServiceURL": "https://metrxbot.com/terms",
+    "defaultPrompt": ["Show me this period's workforce review."]
+  }
+}

@@ -44,6 +44,9 @@ decides; Metrx records.
    the `combined_into_agent_id`. Pass an `idempotency_key` built from the
    agent key and today's date so a retry does not record twice. This needs
    the `write` scope; on `insufficient_scope`, relay the `user_message`.
+   A **retire** also archives the agent and cannot be undone from the
+   dashboard: confirm it with the manager before you call, and expect a
+   `403` unless the key has the admin scope (relay that message too).
 6. Close with one line per decision recorded: kind, agent, date. These are
    the "Decisions on record" the next review shows.
 

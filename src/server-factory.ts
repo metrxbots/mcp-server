@@ -36,7 +36,9 @@ import {
   mcpScopeSentence,
   mcpToolAuthMode,
   mcpToolSet,
+  mcpToolOAuthAllowed,
   LEGACY_ENVELOPE_PENDING_NOTE,
+  type McpCallerAuthMode,
   type McpToolName,
   type McpToolSetName,
 } from './tool-registry-facts.js';
@@ -49,13 +51,16 @@ import {
  * authMode 'public': no key. ONLY the tools MCP_TOOL_AUTH marks 'public' are
  *   registered (tools/list shows nothing a keyless caller cannot call), and
  *   their descriptions carry no scope sentence.
+ * authMode 'oauth': a signed-in user through an OAuth connector
+ *   (/api/mcp/connect). Every tool except MCP_KEY_ONLY_TOOLS; descriptions
+ *   carry no API-key sentence (the user has no key; their role still applies).
  * toolSet: a named subset (`tools/list ?set=workforce`); undefined = the full
  *   registry. Applied after the auth filter.
  * isDemo: append the demo CTA every fifth call (stdio --demo).
  */
 export interface CreateMcpServerOptions {
   isDemo?: boolean;
-  authMode?: 'key' | 'public';
+  authMode?: McpCallerAuthMode;
   toolSet?: McpToolSetName;
 }
 
@@ -206,13 +211,15 @@ export function createMcpServer(
     // narrows further. A skipped tool returns an inert handle so a module that
     // enriches its description later (verify-billing) has nothing to crash on.
     if (authMode === 'public' && toolAuth !== 'public') return SKIPPED_TOOL_HANDLE;
+    if (authMode === 'oauth' && !mcpToolOAuthAllowed(bareName)) return SKIPPED_TOOL_HANDLE;
     if (toolSet && !toolSet.has(bareName as McpToolName)) return SKIPPED_TOOL_HANDLE;
 
     // The scope sentence is for key holders: a public tool's description says
-    // instead what it needs (nothing, or a read key for org:'me').
+    // instead what it needs (nothing, or a read key for org:'me'), and an
+    // OAuth caller has no key to scope.
     const scopeSentence = mcpScopeSentence(scope);
     const withScope = (description: unknown): unknown =>
-      toolAuth === 'public'
+      toolAuth === 'public' || authMode === 'oauth'
         ? description
         : typeof description === 'string' && !description.includes(scopeSentence)
           ? `${description.trimEnd()} ${scopeSentence}`
@@ -272,7 +279,7 @@ export function createMcpServer(
   registerLoopMetricsTools(server as any, client);
   // Manager's desk (plan §2). SDK-import-free like loop-metrics; the public
   // three answer without a key through the keyless clients.
-  registerWorkforceTools(server as any, client);
+  registerWorkforceTools(server as any, client, { authMode });
 
   // ── MCP Prompts ──
   // Pre-built prompt templates that help users interact with Metrx tools.

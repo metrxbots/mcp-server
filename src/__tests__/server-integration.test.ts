@@ -445,6 +445,8 @@ import {
   PUBLIC_TOOL_COUNT,
   WORKFORCE_TOOL_SET,
   mcpScopeSentence,
+  MCP_KEY_ONLY_TOOLS,
+  mcpToolOAuthAllowed,
 } from '../../dist/tool-registry-facts';
 
 describe('Tool scopes (W1-4b)', () => {
@@ -484,6 +486,45 @@ describe('Tool scopes (W1-4b)', () => {
     const names = Object.keys((server as any)._registeredTools as Record<string, any>).sort();
     expect(names).toHaveLength(PUBLIC_TOOL_COUNT);
     expect(names).toEqual(MCP_PUBLIC_MODE_TOOL_NAMES.map((n) => `metrx_${n}`).sort());
+  });
+
+  it('oauth mode registers every tool except the key-only ones, without the API-key sentence (PR C V4)', () => {
+    const server = createMcpServer(fakeClient as any, { authMode: 'oauth' });
+    const registered = (server as any)._registeredTools as Record<string, any>;
+    const names = Object.keys(registered).sort();
+    expect(MCP_KEY_ONLY_TOOLS).toEqual(['buy_verification']);
+    expect(names).toEqual(
+      Object.keys(MCP_TOOL_AUTH)
+        .filter((n) => !MCP_KEY_ONLY_TOOLS.includes(n))
+        .map((n) => `metrx_${n}`)
+        .sort()
+    );
+    for (const name of names) {
+      const bare = name.replace(/^metrx_/, '');
+      const scope = (MCP_TOOL_SCOPES as Record<string, string>)[bare];
+      // A connector user has no API key; telling the model to get one is false.
+      expect(registered[name].description, name).not.toContain(mcpScopeSentence(scope as any));
+      expect(registered[name]._meta?.['metrx/required_scope'], name).toBe(scope);
+    }
+    expect(mcpToolOAuthAllowed('metrx_buy_verification')).toBe(false);
+    expect(mcpToolOAuthAllowed('get_workforce_review')).toBe(true);
+    expect(mcpToolOAuthAllowed('no_such_tool')).toBe(false);
+  });
+
+  it("oauth mode: the workforce review defaults to the caller's own org (PR C review M2)", () => {
+    const oauth = (createMcpServer(fakeClient as any, { authMode: 'oauth' }) as any)
+      ._registeredTools['metrx_get_workforce_review'];
+    expect(oauth.description).not.toMatch(/API key/i);
+    const keyed = (createMcpServer(fakeClient as any) as any)._registeredTools[
+      'metrx_get_workforce_review'
+    ];
+    expect(keyed.description).toMatch(/API key/);
+  });
+
+  it('oauth mode intersects with the workforce tool set', () => {
+    const server = createMcpServer(fakeClient as any, { authMode: 'oauth', toolSet: 'workforce' });
+    const names = Object.keys((server as any)._registeredTools as Record<string, any>).sort();
+    expect(names).toEqual([...WORKFORCE_TOOL_SET].map((n) => `metrx_${n}`).sort());
   });
 
   it('the workforce tool set narrows the list in key mode and intersects it in public mode', () => {

@@ -28,6 +28,7 @@
 
 import { z } from 'zod';
 import { deskErrorResult, type DeskProblem } from '../errors.js';
+import { type McpCallerAuthMode, workforceDefaultOrg } from '../tool-registry-facts.js';
 
 /** Structural server type (registration surface only — SDK stays type-free here). */
 export interface WorkforceToolRegistrar {
@@ -86,6 +87,12 @@ const APPEND = {
   openWorldHint: false,
 } as const;
 
+/**
+ * record_decision appends like APPEND, but a `retire` archives the agent
+ * (mig 156), which no tool call can undo: destructive, so a client asks first.
+ */
+const RECORD_DECISION = { ...APPEND, destructiveHint: true } as const;
+
 // ── Paths (the v1 routes; the client prepends its /api base) ──
 export const WORKFORCE_REVIEW_PATH = '/v1/workforce-review';
 export const CONTRACT_DRAFT_PATH = '/v1/contracts/draft';
@@ -100,27 +107,41 @@ export const decisionsPath = (agentKey: string): string =>
 const AGENT_KEY = z.string().trim().min(1).max(200);
 const ISO = z.string().datetime({ offset: true });
 
-export const WorkforceReviewInput = {
-  org: z
-    .enum(['demo', 'me'])
-    .default('demo')
-    .describe(
-      "'demo' (default) reads the public Northwind sample review and needs no key; " +
-        "'me' reviews your own org and needs an API key with the 'read' scope."
-    ),
-  cursor: z
-    .string()
-    .max(256)
-    .optional()
-    .describe('Next page: the cursor the previous page returned.'),
-  limit: z
-    .number()
-    .int()
-    .min(1)
-    .max(100)
-    .optional()
-    .describe('Agents per page (default 25, max 100).'),
-};
+/**
+ * The review's input schema for a caller. The default lives in the SCHEMA
+ * (the SDK applies it before the handler runs), and the wording follows it: a
+ * connector user has no API key, so telling the model to get one is false.
+ */
+export function workforceReviewInput(authMode: McpCallerAuthMode = 'key') {
+  const signedIn = workforceDefaultOrg(authMode) === 'me';
+  return {
+    org: z
+      .enum(['demo', 'me'])
+      .default(workforceDefaultOrg(authMode))
+      .describe(
+        signedIn
+          ? "'me' (default) reviews your own org as you, with your role; " +
+              "'demo' reads the public Northwind sample review."
+          : "'demo' (default) reads the public Northwind sample review and needs no key; " +
+              "'me' reviews your own org and needs an API key with the 'read' scope."
+      ),
+    cursor: z
+      .string()
+      .max(256)
+      .optional()
+      .describe('Next page: the cursor the previous page returned.'),
+    limit: z
+      .number()
+      .int()
+      .min(1)
+      .max(100)
+      .optional()
+      .describe('Agents per page (default 25, max 100).'),
+  };
+}
+
+/** The key/keyless schema (mirrors the app's route query). */
+export const WorkforceReviewInput = workforceReviewInput('key');
 
 export const ScorecardInput = {
   agent_key: AGENT_KEY.describe('The agent_key you registered (not the row id).'),
@@ -285,8 +306,17 @@ function routeError(
 
 export function registerWorkforceTools(
   server: WorkforceToolRegistrar,
-  client: WorkforceApiClient
+  client: WorkforceApiClient,
+  options: { authMode?: McpCallerAuthMode } = {}
 ): void {
+  const authMode = options.authMode ?? 'key';
+  const defaultOrg = workforceDefaultOrg(authMode);
+  const orgSentence =
+    defaultOrg === 'me'
+      ? 'org=me (default) reviews your own org as you, with your role; org=demo reads ' +
+        'the public Northwind sample. '
+      : 'org=demo reads the public Northwind sample and needs no key; org=me reads your ' +
+        "own org and needs an API key with the 'read' scope. ";
   server.registerTool(
     'get_workforce_review',
     {
@@ -294,14 +324,14 @@ export function registerWorkforceTools(
       description:
         'The weekly workforce review: every AI agent in the org as a line manager would ' +
         'read it (job, cost this window, outcomes, scorecard state, the candidate decision ' +
-        'and why). org=demo reads the public Northwind sample and needs no key; org=me ' +
-        "reads your own org and needs an API key with the 'read' scope. Paged by cursor. " +
-        'Numbers are the same the review page shows.',
-      inputSchema: WorkforceReviewInput,
+        'and why). ' +
+        orgSentence +
+        'Paged by cursor. Numbers are the same the review page shows.',
+      inputSchema: workforceReviewInput(authMode),
       annotations: { ...READ_ONLY },
     },
     async (args: { org?: 'demo' | 'me'; cursor?: string; limit?: number }) => {
-      const params: Record<string, string | number> = { org: args?.org ?? 'demo' };
+      const params: Record<string, string | number> = { org: args?.org ?? defaultOrg };
       if (args?.cursor) params.cursor = args.cursor;
       if (args?.limit) params.limit = args.limit;
       const result = await client.get<unknown>(WORKFORCE_REVIEW_PATH, params);
@@ -386,9 +416,11 @@ export function registerWorkforceTools(
         'scorecard at decision time as evidence, and appears on the agent page. The same ' +
         'decision within 60 seconds is refused as a double submit; pass idempotency_key to ' +
         'make a retry return the first record. Use a new key for each new decision: a key ' +
-        'reused with a different decision is refused.',
+        'reused with a different decision is refused. A retire also archives the agent in ' +
+        'the same step (it leaves the review and the grading queue; there is no undo in the ' +
+        'product) and needs an owner or admin: an API key with the admin scope.',
       inputSchema: RecordDecisionInput,
-      annotations: { ...APPEND },
+      annotations: { ...RECORD_DECISION },
     },
     async (args: {
       agent_key: string;
