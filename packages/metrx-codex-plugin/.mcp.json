@@ -1,0 +1,18 @@
+{
+  "mcpServers": {
+    "metrx": {
+      "type": "streamable-http",
+      "url": "https://metrxbot.com/api/mcp/connect",
+      "extensions": {
+        "com.openai": {
+          "auth": {
+            "type": "oauth",
+            "client": {
+              "mode": "dcr"
+            }
+          }
+        }
+      }
+    }
+  }
+}

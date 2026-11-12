@@ -11,6 +11,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import {
   registerWorkforceTools,
+  workforceReviewInput,
   WORKFORCE_REVIEW_PATH,
   CONTRACT_DRAFT_PATH,
   VENDOR_BILL_CHECK_PATH,
@@ -27,6 +28,7 @@ import {
   MCP_TOOLS_BY_DOMAIN,
   MCP_TOOL_AUTH,
   MCP_TOOL_SCOPES,
+  workforceDefaultOrg,
 } from '../../dist/tool-registry-facts';
 
 type Handler = (args: Record<string, unknown>) => Promise<{
@@ -74,7 +76,8 @@ describe('Workforce tools registration', () => {
       expect(configs[n].annotations.openWorldHint, n).toBe(false);
     }
     expect(configs.record_decision.annotations.readOnlyHint).toBe(false);
-    expect(configs.record_decision.annotations.destructiveHint).toBe(false);
+    // A retire archives the agent (mig 156): destructive, so clients confirm.
+    expect(configs.record_decision.annotations.destructiveHint).toBe(true);
   });
 
   it('every desk tool has a scope and an auth mode in the SSOT', () => {
@@ -281,5 +284,58 @@ describe('HttpKeylessClient (stdio --demo)', () => {
     const res = await client.get(WORKFORCE_REVIEW_PATH, { org: 'demo' });
     expect(res.error).toContain(MCP_ERRORS.transport_error.message);
     fetchSpy.mockRestore();
+  });
+});
+
+describe('get_workforce_review for a signed-in connector user (PR C review M2)', () => {
+  it("the default org is the caller's own for oauth and the sample otherwise", () => {
+    expect(workforceDefaultOrg('oauth')).toBe('me');
+    expect(workforceDefaultOrg('key')).toBe('demo');
+    expect(workforceDefaultOrg('public')).toBe('demo');
+  });
+
+  it('the schema default follows the auth mode (the SDK applies it before the handler)', () => {
+    expect(workforceReviewInput('oauth').org.parse(undefined)).toBe('me');
+    expect(workforceReviewInput('key').org.parse(undefined)).toBe('demo');
+  });
+
+  function reviewConfig(authMode?: 'key' | 'public' | 'oauth') {
+    const server = createMockServer();
+    const client = createMockClient();
+    registerWorkforceTools(server as any, client as any, authMode ? { authMode } : undefined);
+    const call = (server.registerTool as any).mock.calls.find(
+      ([n]: [string]) => n === 'get_workforce_review'
+    );
+    return { config: call[1], handler: call[2] as Handler, client };
+  }
+
+  it('oauth: no API-key wording, the own org is the default, demo stays reachable', async () => {
+    const { config, handler, client } = reviewConfig('oauth');
+    const text = `${config.description} ${config.inputSchema.org.description}`;
+    expect(text).not.toMatch(/API key/i);
+    expect(text).toMatch(/org=me \(default\)|'me' \(default\)/);
+    expect(text).toMatch(/Northwind/);
+    await handler({});
+    expect(client.get).toHaveBeenCalledWith(
+      WORKFORCE_REVIEW_PATH,
+      expect.objectContaining({ org: 'me' })
+    );
+    await handler({ org: 'demo' });
+    expect(client.get).toHaveBeenLastCalledWith(
+      WORKFORCE_REVIEW_PATH,
+      expect.objectContaining({ org: 'demo' })
+    );
+  });
+
+  it('key and public modes are unchanged: demo by default, own org needs a read key', async () => {
+    for (const mode of [undefined, 'key', 'public'] as const) {
+      const { config, handler, client } = reviewConfig(mode);
+      expect(config.description, String(mode)).toMatch(/API key/);
+      await handler({});
+      expect(client.get).toHaveBeenCalledWith(
+        WORKFORCE_REVIEW_PATH,
+        expect.objectContaining({ org: 'demo' })
+      );
+    }
   });
 });

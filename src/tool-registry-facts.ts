@@ -212,6 +212,19 @@ export const mcpScopeSentence = (scope: McpToolScope): string =>
  */
 export type McpToolName = (typeof MCP_TOOLS_BY_DOMAIN)[keyof typeof MCP_TOOLS_BY_DOMAIN][number];
 export type McpToolAuthMode = 'key' | 'public';
+/** How the CALLER authenticated (vs McpToolAuthMode, what a TOOL needs). */
+export type McpCallerAuthMode = 'key' | 'public' | 'oauth';
+
+/**
+ * get_workforce_review's default `org` for a caller (PR C review M2). A
+ * connector user signed in as themselves, so "the workforce review" means
+ * their own org; a key or keyless caller keeps the public Northwind sample as
+ * the default (desk PR 1). /api/mcp/connect reads this too, so its analytics
+ * `demo` flag cannot disagree with what the tool served.
+ */
+export function workforceDefaultOrg(authMode: McpCallerAuthMode): 'demo' | 'me' {
+  return authMode === 'oauth' ? 'me' : 'demo';
+}
 
 const PUBLIC_TOOLS = ['get_workforce_review', 'draft_job_contract', 'check_vendor_bill'] as const;
 
@@ -237,6 +250,26 @@ export const MCP_PUBLIC_MODE_TOOL_NAMES: readonly string[] = MCP_TOOL_NAMES.filt
 
 /** How many tools an unauthenticated tools/list shows. Pinned by the drift test. */
 export const PUBLIC_TOOL_COUNT: number = MCP_PUBLIC_MODE_TOOL_NAMES.length;
+
+/**
+ * Tools an OAuth connector (Claude.ai, ChatGPT, Codex via /api/mcp/connect)
+ * does NOT get (PR C plan v2 V4). `buy_verification` posts to /api/ucp/checkout,
+ * which authenticates API keys only: spending money stays behind a credential
+ * the buyer minted on purpose, not a sign-in a chat client holds. The hosted
+ * route hides these from tools/list and answers `auth_required` on a call.
+ * apps/web/tests/mcp-oauth-allowlist-drift.test.ts keeps their routes OFF the
+ * OAuth route allowlist.
+ */
+export const MCP_KEY_ONLY_TOOLS: readonly McpToolName[] = ['buy_verification'];
+
+/** True when an OAuth connector may list and call this tool (prefixed or bare name). */
+export function mcpToolOAuthAllowed(name: string): boolean {
+  const bare = name.startsWith(MCP_TOOL_PREFIX) ? name.slice(MCP_TOOL_PREFIX.length) : name;
+  return (
+    Object.prototype.hasOwnProperty.call(MCP_TOOL_AUTH, bare) &&
+    !(MCP_KEY_ONLY_TOOLS as readonly string[]).includes(bare)
+  );
+}
 
 /**
  * The manager's-desk tool set: what `tools/list ?set=workforce` returns and what

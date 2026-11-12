@@ -1,12 +1,14 @@
 {
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.metrxbot/mcp-server",
-  "description": "AI Agent Cost Intelligence Platform — track what every AI agent costs, detect waste, compare models, and see what each agent cost against what it produced. 41 MCP tools across 15 domains.",
+  "title": "Metrxbot",
+  "description": "Manage the AI agents your company employs: workforce review, contracts, bill checks. 41 MCP tools.",
+  "websiteUrl": "https://metrxbot.com",
   "repository": {
     "url": "https://github.com/metrxbots/mcp-server",
     "source": "github"
   },
-  "version": "0.5.0",
+  "version": "0.5.0-1",
   "packages": [
     {
       "registryType": "npm",
@@ -15,6 +17,24 @@
       "transport": {
         "type": "stdio"
       }
+    }
+  ],
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://metrxbot.com/api/mcp/connect"
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://metrxbot.com/api/mcp",
+      "headers": [
+        {
+          "name": "Authorization",
+          "description": "Bearer <your Metrx API key>. Optional: without it the public desk tools answer over the Northwind sample.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
     }
   ]
 }

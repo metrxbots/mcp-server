@@ -6,7 +6,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Added
+- **Metrx connector for Codex**, under `packages/metrx-codex-plugin`. It connects to the hosted server at `https://metrxbot.com/api/mcp/connect` and signs you in with OAuth, so no API key is needed. `.agents/plugins/marketplace.json` now lists this plugin in the Codex format. The `metrx-desk` plugin stays in the Claude marketplace in `.claude-plugin/`.
+- **Registry entry 0.5.0-1** (`server.json`). It adds the hosted server under `remotes`, plus a title and a website. The npm package is still 0.5.0.
+
+### Changed
+- **Workforce review over OAuth.** If you connect through OAuth, `metrx_get_workforce_review` reviews your own org by default. Pass `org=demo` to read the Northwind sample. API-key and keyless callers keep the old default, which is `demo`.
 
 ## [0.5.0] - 2026-11-08
 
