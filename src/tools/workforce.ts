@@ -1,15 +1,16 @@
 /**
  * Workforce Tools — the manager's desk (plan §2, PR 1).
  *
- * Five tools over the api/v1 desk routes:
+ * Six tools over the api/v1 desk routes:
  *   - get_workforce_review  → GET  /v1/workforce-review        (public for org=demo;
  *                                                               org=me needs a read key)
  *   - get_scorecard         → GET  /v1/agents/{key}/scorecard  (read key)
  *   - draft_job_contract    → POST /v1/contracts/draft         (public: pure function)
  *   - check_vendor_bill     → POST /v1/vendor-bill/check       (public: pure function)
+ *   - cost_per_resolution   → POST /v1/cost-per-resolution     (public: pure function)
  *   - record_decision       → POST /v1/agents/{key}/decisions  (write key)
  *
- * The public three answer with no key on BOTH transports: the hosted endpoint
+ * The public four answer with no key on BOTH transports: the hosted endpoint
  * (an in-process keyless client) and `npx @metrxbot/mcp-server --demo`
  * (HttpKeylessClient over the same routes). Which tool needs a key is declared
  * in MCP_TOOL_AUTH (tool-registry-facts.ts), not inferred here.
@@ -22,7 +23,7 @@
  * tests import this module directly (relative path, nested-worktree safe), so
  * it must be loadable outside this package's build. The input schemas mirror
  * the app's Zod schemas (lib/validations/agent-decisions.ts,
- * lib/contracts/draft-contract.ts, lib/vendor-bill/check-input.ts): the route
+ * lib/contracts/draft-contract.ts, lib/vendor-bill/check-input.ts, lib/cost-per-resolution/compute.ts): the route
  * is the validator of record; these exist so an MCP client sees the shape.
  */
 
@@ -97,6 +98,7 @@ const RECORD_DECISION = { ...APPEND, destructiveHint: true } as const;
 export const WORKFORCE_REVIEW_PATH = '/v1/workforce-review';
 export const CONTRACT_DRAFT_PATH = '/v1/contracts/draft';
 export const VENDOR_BILL_CHECK_PATH = '/v1/vendor-bill/check';
+export const COST_PER_RESOLUTION_PATH = '/v1/cost-per-resolution';
 export const scorecardPath = (agentKey: string): string =>
   `/v1/agents/${encodeURIComponent(agentKey)}/scorecard`;
 export const decisionsPath = (agentKey: string): string =>
@@ -243,6 +245,50 @@ export const CheckVendorBillInput = {
     .max(100)
     .optional()
     .describe('The spans your records cover; omitted = nothing is covered.'),
+};
+
+export const CostPerResolutionInput = {
+  bill_total: z
+    .number()
+    .min(0)
+    .max(1_000_000_000_000)
+    .describe('What the vendor billed for the period, in the bill currency.'),
+  currency: z
+    .string()
+    .trim()
+    .regex(/^[A-Za-z]{3}$/)
+    .optional()
+    .describe('ISO 4217 code of the bill, such as USD (the default) or EUR.'),
+  billed_resolutions: z
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000_000)
+    .describe('How many resolutions the vendor billed in the period.'),
+  period: z
+    .object({
+      from: z.string().trim().describe('Period start, a date such as 2026-10-01.'),
+      to: z.string().trim().describe('Period end, a date such as 2026-10-31.'),
+    })
+    .strict()
+    .describe('The billing period the bill covers (from on or before to).'),
+  vendor: z.string().trim().max(100).optional().describe('The vendor name, if you want it echoed.'),
+  vendor_resolved_definition: z
+    .string()
+    .max(2000)
+    .optional()
+    .describe(
+      "The vendor's own wording for what counts as resolved; echoed back verbatim as the vendor's definition, not verified."
+    ),
+  total_conversations: z
+    .number()
+    .int()
+    .min(0)
+    .max(1_000_000_000)
+    .optional()
+    .describe(
+      'All conversations the agent handled in the period; adds the billed-resolution share.'
+    ),
 };
 
 export const DECISION_KINDS = ['expand', 're_specify', 'combine', 'retire'] as const;
@@ -401,6 +447,31 @@ export function registerWorkforceTools(
       const result = await client.post<unknown>(VENDOR_BILL_CHECK_PATH, args ?? {});
       if (result.error || result.data === undefined) {
         return routeError('check_vendor_bill', result);
+      }
+      return okResult(result.data);
+    }
+  );
+
+  server.registerTool(
+    'cost_per_resolution',
+    {
+      title: 'Cost Per Resolution',
+      description:
+        'The two numbers on a per-resolution AI bill (Intercom Fin, Zendesk AI, Sierra, ' +
+        'Decagon): the effective price per billed resolution and, given total conversations, ' +
+        "the billed-resolution share. The vendor's definition of resolved is echoed back " +
+        "verbatim as the vendor definition, not verified. Both numbers are the vendor's own " +
+        'count and come back labelled vendor-reported, not Verified. A pure function over ' +
+        'your input: reads nothing, stores nothing, needs no key. It always ends with the next ' +
+        'step: send one export (bill lines with ticket ids plus your ticket export for the ' +
+        'same period) to check_vendor_bill, which recounts it.',
+      inputSchema: CostPerResolutionInput,
+      annotations: { ...PURE },
+    },
+    async (args: Record<string, unknown>) => {
+      const result = await client.post<unknown>(COST_PER_RESOLUTION_PATH, args ?? {});
+      if (result.error || result.data === undefined) {
+        return routeError('cost_per_resolution', result);
       }
       return okResult(result.data);
     }

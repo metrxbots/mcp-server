@@ -63,11 +63,14 @@ export const MCP_TOOLS_BY_DOMAIN = {
   'verify-billing': ['get_balance', 'buy_verification', 'verify_switch'],
   // Manager's desk (plan §2, PR 1): the workforce review, the scorecard by
   // agent_key, two pure drafting/checking tools, and the decision record.
+  // cost_per_resolution (0.6.0): the third pure tool, the two-numbers first call
+  // before a vendor bill is recounted by check_vendor_bill.
   workforce: [
     'get_workforce_review',
     'get_scorecard',
     'draft_job_contract',
     'check_vendor_bill',
+    'cost_per_resolution',
     'record_decision',
   ],
 } as const satisfies Record<string, readonly string[]>;
@@ -176,6 +179,7 @@ export const MCP_TOOL_SCOPES: Record<string, McpToolScope> = {
   get_scorecard: 'read',
   draft_job_contract: 'read',
   check_vendor_bill: 'read',
+  cost_per_resolution: 'read',
   record_decision: 'write',
 };
 
@@ -226,7 +230,12 @@ export function workforceDefaultOrg(authMode: McpCallerAuthMode): 'demo' | 'me' 
   return authMode === 'oauth' ? 'me' : 'demo';
 }
 
-const PUBLIC_TOOLS = ['get_workforce_review', 'draft_job_contract', 'check_vendor_bill'] as const;
+const PUBLIC_TOOLS = [
+  'get_workforce_review',
+  'draft_job_contract',
+  'check_vendor_bill',
+  'cost_per_resolution',
+] as const;
 
 export const MCP_TOOL_AUTH: Record<McpToolName, McpToolAuthMode> = Object.fromEntries(
   MCP_TOOL_NAMES.map((name) => [
@@ -282,6 +291,7 @@ export const WORKFORCE_TOOL_SET: ReadonlySet<McpToolName> = new Set<McpToolName>
   'get_scorecard',
   'draft_job_contract',
   'check_vendor_bill',
+  'cost_per_resolution',
   'record_decision',
   'get_job_contract',
   'set_job_contract',

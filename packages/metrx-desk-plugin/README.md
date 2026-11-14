@@ -14,13 +14,14 @@ claude plugin install metrx-desk@metrxbots
 
 Then, in Claude Code:
 
-| Command                          | What it does                                                      | Needs a key |
-| -------------------------------- | ----------------------------------------------------------------- | ----------- |
-| `/metrx-desk:sample-review`      | The Northwind sample review (synthetic demo data)                 | No          |
-| `/metrx-desk:draft-job-contract` | Draft a job contract for one agent from a template                | No          |
-| `/metrx-desk:check-vendor-bill`  | Reconcile an AI vendor's per-resolution bill against your records | No          |
-| `/metrx-desk:connect-metrx`      | Point the desk at your own agents (API key, first events)         | Creates one |
-| `/metrx-desk:weekly-decisions`   | Your decision queue, and record what you decide                   | Yes         |
+| Command                           | What it does                                                            | Needs a key |
+| --------------------------------- | ----------------------------------------------------------------------- | ----------- |
+| `/metrx-desk:sample-review`       | The Northwind sample review (synthetic demo data)                       | No          |
+| `/metrx-desk:draft-job-contract`  | Draft a job contract for one agent from a template                      | No          |
+| `/metrx-desk:cost-per-resolution` | The two numbers on a per-resolution AI bill, as the vendor reports them | No          |
+| `/metrx-desk:check-vendor-bill`   | Reconcile an AI vendor's per-resolution bill against your records       | No          |
+| `/metrx-desk:connect-metrx`       | Point the desk at your own agents (API key, first events)               | Creates one |
+| `/metrx-desk:weekly-decisions`    | Your decision queue, and record what you decide                         | Yes         |
 
 ## Configuration
 
@@ -35,7 +36,7 @@ workforce tool set. Two environment variables, both optional:
 ## Tools behind the skills
 
 `metrx_get_workforce_review`, `metrx_get_scorecard`, `metrx_draft_job_contract`,
-`metrx_check_vendor_bill`, `metrx_record_decision`, `metrx_get_job_contract`,
+`metrx_cost_per_resolution`, `metrx_check_vendor_bill`, `metrx_record_decision`, `metrx_get_job_contract`,
 `metrx_set_job_contract`, `metrx_get_decision_queue`, `metrx_get_cost_summary`. The hosted
 registry at https://metrxbot.com/.well-known/agent-card.json is the
 authoritative list; the error classes are documented at

@@ -4,7 +4,7 @@
 
 name: "Metrx MCP Server"
 description: >
-  Track what every AI agent costs and what it produced. 41 tools for LLM cost
+  Track what every AI agent costs and what it produced. 42 tools for LLM cost
   tracking per agent/model/provider, provider arbitrage (OpenAI vs Anthropic vs
   Google), budget enforcement with auto-pause, draft A/B model experiments, cost leak
   detection (7-check audit), and revenue attribution. Agents that install Metrx
@@ -12,7 +12,7 @@ description: >
   optimization engine recommends cheaper models, and a draft experiment records
   the change to test. Free tier, one-command install. Works with Claude Desktop,
   Cursor, Windsurf, and any MCP client.
-version: "0.5.0"
+version: "0.6.0"
 
 startCommand:
   type: stdio

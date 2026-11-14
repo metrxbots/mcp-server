@@ -2,18 +2,18 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.metrxbot/mcp-server",
   "title": "Metrxbot",
-  "description": "Manage the AI agents your company employs: workforce review, contracts, bill checks. 41 MCP tools.",
+  "description": "Manage the AI agents your company employs: workforce review, contracts, bill checks. 42 MCP tools.",
   "websiteUrl": "https://metrxbot.com",
   "repository": {
     "url": "https://github.com/metrxbots/mcp-server",
     "source": "github"
   },
-  "version": "0.5.0-1",
+  "version": "0.6.0-1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@metrxbot/mcp-server",
-      "version": "0.5.0",
+      "version": "0.6.0",
       "transport": {
         "type": "stdio"
       }

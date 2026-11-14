@@ -1,7 +1,7 @@
 /**
  * HttpKeylessClient — the stdio `--demo` client (manager's desk PR 1).
  *
- * No API key. It `fetch`es ONLY the three unauthenticated api/v1 routes
+ * No API key. It `fetch`es ONLY the unauthenticated api/v1 routes
  * (PUBLIC_V1_PATHS below, the mirror of apps/web/lib/api/public-v1.ts), with
  * no Authorization header, so one `--demo` call is rate-limited exactly once,
  * at the route (30/min/IP). Any other path is a key tool: it is answered
@@ -31,6 +31,7 @@ export const PUBLIC_V1_PATHS = [
   '/v1/workforce-review',
   '/v1/contracts/draft',
   '/v1/vendor-bill/check',
+  '/v1/cost-per-resolution',
 ] as const;
 
 function isPublicPath(path: string): boolean {
