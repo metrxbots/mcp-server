@@ -15,6 +15,7 @@ import {
   WORKFORCE_REVIEW_PATH,
   CONTRACT_DRAFT_PATH,
   VENDOR_BILL_CHECK_PATH,
+  COST_PER_RESOLUTION_PATH,
   scorecardPath,
   decisionsPath,
 } from '../../dist/tools/workforce';
@@ -71,7 +72,7 @@ describe('Workforce tools registration', () => {
     for (const n of ['get_workforce_review', 'get_scorecard']) {
       expect(configs[n].annotations.readOnlyHint, n).toBe(true);
     }
-    for (const n of ['draft_job_contract', 'check_vendor_bill']) {
+    for (const n of ['draft_job_contract', 'check_vendor_bill', 'cost_per_resolution']) {
       expect(configs[n].annotations.readOnlyHint, n).toBe(true);
       expect(configs[n].annotations.openWorldHint, n).toBe(false);
     }
@@ -150,6 +151,24 @@ describe('Workforce tool paths and pass-through', () => {
     );
   });
 
+  it('cost_per_resolution POSTs the pure route with the body', async () => {
+    const server = createMockServer();
+    const client = createMockClient();
+    registerWorkforceTools(server as any, client as any);
+    await handlerFor(
+      server,
+      'cost_per_resolution'
+    )({
+      bill_total: 12400,
+      billed_resolutions: 6200,
+      period: { from: '2026-10-01', to: '2026-10-31' },
+    });
+    expect(client.post).toHaveBeenCalledWith(
+      COST_PER_RESOLUTION_PATH,
+      expect.objectContaining({ bill_total: 12400, billed_resolutions: 6200 })
+    );
+  });
+
   it('record_decision POSTs the decisions route for the agent', async () => {
     const server = createMockServer();
     const client = createMockClient();
@@ -224,9 +243,14 @@ describe('Workforce tool paths and pass-through', () => {
 });
 
 describe('HttpKeylessClient (stdio --demo)', () => {
-  it('the public path list is exactly the three keyless desk routes', () => {
+  it('the public path list is exactly the four keyless desk routes', () => {
     expect([...PUBLIC_V1_PATHS].sort()).toEqual(
-      [WORKFORCE_REVIEW_PATH, CONTRACT_DRAFT_PATH, VENDOR_BILL_CHECK_PATH].sort()
+      [
+        WORKFORCE_REVIEW_PATH,
+        CONTRACT_DRAFT_PATH,
+        VENDOR_BILL_CHECK_PATH,
+        COST_PER_RESOLUTION_PATH,
+      ].sort()
     );
   });
 

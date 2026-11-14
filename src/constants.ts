@@ -23,4 +23,4 @@ export const MAX_TEXT_LENGTH = 4000;
  * or CI fails.
  */
 export const SERVER_NAME = 'metrx-mcp-server';
-export const SERVER_VERSION = '0.5.0';
+export const SERVER_VERSION = '0.6.0';

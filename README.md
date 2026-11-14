@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@metrxbot/mcp-server)](https://www.npmjs.com/package/@metrxbot/mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-The **Model Context Protocol (MCP) server** for [Metrx](https://metrxbot.com): how a company manages the AI agents it employs. Each agent gets a job contract, a scorecard against it, and a P&L: what it cost and what it produced. This server exposes those records as tools that any MCP-compatible client (Claude, GPT, Gemini, custom agents) can call. Version 0.5.0.
+The **Model Context Protocol (MCP) server** for [Metrx](https://metrxbot.com): how a company manages the AI agents it employs. Each agent gets a job contract, a scorecard against it, and a P&L: what it cost and what it produced. This server exposes those records as tools that any MCP-compatible client (Claude, GPT, Gemini, custom agents) can call. Version 0.6.0.
 
 This package is the single source for both transports: the npm package you run locally over stdio, and the hosted server at `https://metrxbot.com/api/mcp`. The public repository at https://github.com/metrxbots/mcp-server is a mirror, synced from the monorepo by `packages/mcp-server/scripts/publish-mirror.ts`. Contributors open pull requests against the monorepo; issues go to https://github.com/metrxbots/mcp-server/issues.
 
@@ -36,21 +36,22 @@ METRX_API_KEY=sk_live_xxx npx @metrxbot/mcp-server
 
 ## Claude Code plugin
 
-The desk plugin wraps the workforce tool set in five skills.
+The desk plugin wraps the workforce tool set in six skills.
 
 ```bash
 claude plugin marketplace add metrxbots/mcp-server && claude plugin install metrx-desk@metrxbots
 ```
 
-Versions: this server is 0.5.0 (`@metrxbot/mcp-server`). The desk plugin (`metrx-desk`) and the TypeScript SDK (`@metrxbot/sdk`) are separate artefacts with their own version numbers and release schedules; each states its version in its own package.
+Versions: this server is 0.6.0 (`@metrxbot/mcp-server`). The desk plugin (`metrx-desk`) and the TypeScript SDK (`@metrxbot/sdk`) are separate artefacts with their own version numbers and release schedules; each states its version in its own package.
 
-| Command                          | What it does                                                                                                                                                                           | Needs a key                 |
-| -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
-| `/metrx-desk:sample-review`      | The Northwind sample review (synthetic demo data), relayed with every figure's label                                                                                                   | No                          |
-| `/metrx-desk:draft-job-contract` | Draft a job contract for one agent from a template (support_triage, sdr_qualification, internal_assistant, coding_patch); owner is required; publishing is a separate admin-scope step | No                          |
-| `/metrx-desk:check-vendor-bill`  | Reconcile a per-resolution vendor bill against your own records: matched, disputed, unmatched, outside coverage, with the disputed amount                                              | No                          |
-| `/metrx-desk:connect-metrx`      | Create a key at Settings → Security, set METRX_API_KEY, restart, read your first review                                                                                                | Creates one                 |
-| `/metrx-desk:weekly-decisions`   | Your decision queue; record expand, re_specify, combine or retire with a rationale                                                                                                     | Yes (read; write to record) |
+| Command                           | What it does                                                                                                                                                                                      | Needs a key                 |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
+| `/metrx-desk:sample-review`       | The Northwind sample review (synthetic demo data), relayed with every figure's label                                                                                                              | No                          |
+| `/metrx-desk:draft-job-contract`  | Draft a job contract for one agent from a template (support_triage, sdr_qualification, internal_assistant, coding_patch); owner is required; publishing is a separate admin-scope step            | No                          |
+| `/metrx-desk:cost-per-resolution` | The two numbers on a per-resolution AI bill: price per billed resolution and, with total conversations, the billed share. Both are the vendor's own count, labelled vendor-reported, not Verified | No                          |
+| `/metrx-desk:check-vendor-bill`   | Reconcile a per-resolution vendor bill against your own records: matched, disputed, unmatched, outside coverage, with the disputed amount                                                         | No                          |
+| `/metrx-desk:connect-metrx`       | Create a key at Settings → Security, set METRX_API_KEY, restart, read your first review                                                                                                           | Creates one                 |
+| `/metrx-desk:weekly-decisions`    | Your decision queue; record expand, re_specify, combine or retire with a rationale                                                                                                                | Yes (read; write to record) |
 
 The full walkthrough, including the labels every figure carries and the plain HTTP routes, is at https://docs.metrxbot.com/desk.
 
@@ -58,7 +59,7 @@ The full walkthrough, including the labels every figure carries and the plain HT
 
 The tool registry is published at https://metrxbot.com/.well-known/agent-card.json: names, descriptions, domains, the public subset that answers without a key, and the named tool sets. That file is the authoritative list; this README does not repeat it. Every tool's description ends with the scope it needs (`read`, `write` or `admin`).
 
-Tool names carry the `metrx_` prefix. The desk's public tools are `metrx_get_workforce_review`, `metrx_draft_job_contract` and `metrx_check_vendor_bill`. Signed-in desk tools include `metrx_get_decision_queue`, `metrx_record_decision`, `metrx_get_scorecard`, `metrx_get_job_contract` and `metrx_set_job_contract`; cost reads such as `metrx_get_cost_summary` sit alongside them. A job contract is recorded, not enforced at runtime: publishing one blocks no spend or traffic.
+Tool names carry the `metrx_` prefix. The desk's public tools are `metrx_get_workforce_review`, `metrx_draft_job_contract`, `metrx_cost_per_resolution` and `metrx_check_vendor_bill`. Signed-in desk tools include `metrx_get_decision_queue`, `metrx_record_decision`, `metrx_get_scorecard`, `metrx_get_job_contract` and `metrx_set_job_contract`; cost reads such as `metrx_get_cost_summary` sit alongside them. A job contract is recorded, not enforced at runtime: publishing one blocks no spend or traffic.
 
 ## Guided Prompts
 

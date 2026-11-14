@@ -223,6 +223,9 @@ async function runDemoServer(): Promise<void> {
   );
   console.error(`  ${DIM}metrx_draft_job_contract${RESET}    draft a job contract from a template`);
   console.error(
+    `  ${DIM}metrx_cost_per_resolution${RESET}   the two numbers on a per-resolution vendor bill`
+  );
+  console.error(
     `  ${DIM}metrx_check_vendor_bill${RESET}     reconcile a per-resolution vendor bill\n`
   );
   console.error(`  ${DIM}The full registry (${mcpToolSummary()}) needs an API key:${RESET}`);
