@@ -13,6 +13,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - **Workforce review over OAuth.** If you connect through OAuth, `metrx_get_workforce_review` reviews your own org by default. Pass `org=demo` to read the Northwind sample. API-key and keyless callers keep the old default, which is `demo`.
 
+## [0.6.1] - 2026-11-14
+
+### Added
+- **Vendor terms on a job contract.** `metrx_set_job_contract` accepts three optional text fields: `vendor_name` (who you pay), `billable_unit` (what the vendor bills per, such as `resolution`) and `vendor_resolved_definition` (the vendor's own wording for "resolved", stored verbatim). `metrx_get_job_contract` returns them, and `metrx_draft_job_contract` carries them. The definition is always labelled "the vendor's definition, not verified"; nothing grades, counts or prices from it.
+- `metrx_set_job_contract` also accepts `human_baseline` (dollars in), and `metrx_get_job_contract` returns it.
+
+### Fixed
+- A NUL character in a free-text contract field is refused by the tool's input schema with a message naming the field, instead of failing at the server.
+
+## [0.6.0] - 2026-11-14
+
+### Added
+- **`metrx_cost_per_resolution`**, a public tool (no key): turns a per-resolution vendor bill into the effective price per billed resolution and the cost per resolution your own records support, each with its provenance label.
+
 ## [0.5.0] - 2026-11-08
 
 This repository is now a source mirror of `packages/mcp-server` in the Metrx monorepo, which is the only source from this release on. Until 0.5.0 the two were maintained separately, and they drifted: npm had 23 tools and the hosted server had 29.

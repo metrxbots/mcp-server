@@ -9,6 +9,7 @@
  */
 
 import { describe, it, expect, vi } from 'vitest';
+import { z } from 'zod';
 import {
   registerWorkforceTools,
   workforceReviewInput,
@@ -149,6 +150,56 @@ describe('Workforce tool paths and pass-through', () => {
       VENDOR_BILL_CHECK_PATH,
       expect.objectContaining({ period: { start: '2026-10-01', end: '2026-10-31' } })
     );
+  });
+
+  it.each([
+    'owner',
+    'workload',
+    'objective',
+    'unit_of_work',
+    'notes',
+    'agent_key',
+    'vendor_name',
+    'billable_unit',
+    'vendor_resolved_definition',
+  ])('draft_job_contract rejects U+0000 in %s with a clear message', (field) => {
+    const server = createMockServer();
+    registerWorkforceTools(server as any, createMockClient() as any);
+    const cfg = (server.registerTool as any).mock.calls.find(
+      ([n]: [string]) => n === 'draft_job_contract'
+    )![1];
+    const schema = z.object(cfg.inputSchema);
+    const base = { template: 'support_triage', owner: 'dana@example.com' };
+    expect(schema.safeParse(base).success).toBe(true);
+    const r = schema.safeParse({ ...base, [field]: 'a\u0000b' });
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.issues[0]!.message).toBe('must not contain a NUL (U+0000) character');
+  });
+
+  it('draft_job_contract takes the three vendor fields (caps 200 / 100 / 2000) and passes them through', async () => {
+    const server = createMockServer();
+    const client = createMockClient();
+    registerWorkforceTools(server as any, client as any);
+    const cfg = (server.registerTool as any).mock.calls.find(
+      ([n]: [string]) => n === 'draft_job_contract'
+    )![1];
+    const schema = z.object(cfg.inputSchema);
+    const base = { template: 'support_triage', owner: 'dana@example.com' };
+    const vendor = {
+      vendor_name: 'Acme Support AI',
+      billable_unit: 'resolution',
+      vendor_resolved_definition: 'Not reopened within 72 hours.',
+    };
+    expect(schema.safeParse({ ...base, ...vendor }).success).toBe(true);
+    expect(schema.safeParse({ ...base, vendor_name: 'a'.repeat(201) }).success).toBe(false);
+    expect(schema.safeParse({ ...base, billable_unit: 'a'.repeat(101) }).success).toBe(false);
+    expect(
+      schema.safeParse({ ...base, vendor_resolved_definition: 'a'.repeat(2001) }).success
+    ).toBe(false);
+    expect(cfg.description).toContain("the vendor's definition, not verified");
+    await handlerFor(server, 'draft_job_contract')({ ...base, ...vendor });
+    expect(client.post).toHaveBeenCalledWith(CONTRACT_DRAFT_PATH, expect.objectContaining(vendor));
   });
 
   it('cost_per_resolution POSTs the pure route with the body', async () => {

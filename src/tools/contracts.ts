@@ -26,6 +26,23 @@ import type { MetrxApiClient } from '../services/api-client.js';
 /** Mirrors CONTRACT_WINDOW_RE in @metrx/types (the route validates with it). */
 const CONTRACT_WINDOW_RE = /^([1-9]\d{0,3})(h|d|w)$/;
 
+/**
+ * Label every output that shows the vendor's definition of "resolved" must
+ * carry. Mirrors VENDOR_DEFINITION_LABEL in @metrx/types (this package ships
+ * to npm with no @metrx/types dependency).
+ */
+export const VENDOR_DEFINITION_LABEL = "the vendor's definition, not verified";
+
+/** Caps mirror CONTRACT_VENDOR_*_MAX in @metrx/types and the mig-157 CHECKs. */
+const VENDOR_NAME_MAX = 200;
+const BILLABLE_UNIT_MAX = 100;
+const VENDOR_DEFINITION_MAX = 2000;
+
+/** Postgres TEXT/JSONB refuse U+0000; reject it here with a clear message instead of a server 500. */
+const NO_NUL = (v: string): boolean => !v.includes('\u0000');
+const NO_NUL_MSG = 'must not contain a NUL (U+0000) character';
+const nt = (s: z.ZodString) => s.refine(NO_NUL, { message: NO_NUL_MSG });
+
 const criterionSchema = z.object({
   metric: z
     .string()
@@ -55,6 +72,14 @@ interface ContractRow {
   kpi_target?: { metric: string; target: number; window: string } | null;
   budget?: { limit_microdollars: number; period: string } | null;
   owner?: string | null;
+  human_baseline?: {
+    cost_per_unit_microdollars: number;
+    minutes_per_unit?: number | null;
+    basis: string;
+  } | null;
+  vendor_name?: string | null;
+  billable_unit?: string | null;
+  vendor_resolved_definition?: string | null;
 }
 
 interface ReadoutData {
@@ -126,6 +151,22 @@ function formatContract(c: ContractRow): string {
     );
   }
   if (c.owner) lines.push(`  Owner: ${c.owner}`);
+  if (c.human_baseline) {
+    const hb = c.human_baseline;
+    lines.push(
+      `  Human baseline: ${formatMicrodollars(hb.cost_per_unit_microdollars)} per unit` +
+        `${hb.minutes_per_unit != null ? `, ${hb.minutes_per_unit} min` : ''}` +
+        ` (owner-stated, not measured; basis: ${hb.basis})`
+    );
+  }
+  if (c.vendor_name) lines.push(`  Vendor: ${c.vendor_name}`);
+  if (c.billable_unit) lines.push(`  Vendor bills per: ${c.billable_unit}`);
+  if (c.vendor_resolved_definition) {
+    // Verbatim, quoted, and always labelled: Metrx has not checked this wording.
+    lines.push(
+      `  Vendor's definition of resolved (${VENDOR_DEFINITION_LABEL}): ${JSON.stringify(c.vendor_resolved_definition)}`
+    );
+  }
   if (!c.objective && !c.kpi_target) {
     lines.push(
       '  (workload policy only — no job fields; publish them with set_job_contract, which needs an admin-scoped API key, or from the dashboard: agent → Contract tab)'
@@ -142,7 +183,9 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
       title: 'Get Job Contract',
       description:
         "Read an agent's job contract: its current version per workload (objective, unit of work, " +
-        'acceptance criteria, KPI target, budget, owner) and the full append-only version history. ' +
+        'acceptance criteria, KPI target, budget, owner, human baseline, and the vendor terms: vendor, ' +
+        "billable unit, and the vendor's own definition of resolved, which is labelled \"the vendor's " +
+        'definition, not verified") and the full append-only version history. ' +
         'An agent with no contract returns an explicit empty state with the next action. ' +
         'Read-only.',
       inputSchema: {
@@ -221,7 +264,10 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
         "Publish a NEW VERSION of an agent's job contract (append-only: the previous active version " +
         'for the same workload is superseded in the same transaction). Required: workload, objective, ' +
         'unit_of_work, acceptance_criteria (1-20), kpi_target, budget (dollars per daily|weekly|monthly ' +
-        'period, stored as micro-dollars), owner. Workload-policy terms are inherited from the current ' +
+        'period, stored as micro-dollars), owner. Optional: human_baseline (what a person costs per ' +
+        'unit, in dollars), and the vendor terms vendor_name, billable_unit and ' +
+        "vendor_resolved_definition (the vendor's own wording, kept verbatim, not verified); on a " +
+        'new version an omitted optional keeps the current value and null clears it. Workload-policy terms are inherited from the current ' +
         'version unless supplied in policy_terms. For an agent with no version yet, set ' +
         "policy_defaults: 'inherit_workload_policy' copies the org's workload-level policy (a " +
         "snapshot), 'observe_only' gets terms that grant no authority (needs task_verb and domain in " +
@@ -230,21 +276,18 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
         'Settings → Security → API Keys; any other key is refused with 403. ' +
         'Do NOT use to read a contract — use get_job_contract.',
       inputSchema: {
-        agent_key: z
-          .string()
-          .min(1)
-          .describe('The agent_key (the X-Agent-ID string), not the UUID'),
-        workload: z
-          .string()
-          .min(1)
-          .max(100)
-          .describe("Workload label the contract governs (e.g. 'extraction')"),
-        objective: z.string().min(1).max(2000).describe('What this agent is for, in your words'),
-        unit_of_work: z
-          .string()
-          .min(1)
-          .max(200)
-          .describe("The countable output (e.g. 'one DDQ reviewed')"),
+        agent_key: nt(z.string().min(1)).describe(
+          'The agent_key (the X-Agent-ID string), not the UUID'
+        ),
+        workload: nt(z.string().min(1).max(100)).describe(
+          "Workload label the contract governs (e.g. 'extraction')"
+        ),
+        objective: nt(z.string().min(1).max(2000)).describe(
+          'What this agent is for, in your words'
+        ),
+        unit_of_work: nt(z.string().min(1).max(200)).describe(
+          "The countable output (e.g. 'one DDQ reviewed')"
+        ),
         acceptance_criteria: z
           .array(criterionSchema)
           .min(1)
@@ -252,7 +295,7 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
           .describe('What "done well" means: 1-20 {metric, op, threshold, window}'),
         kpi_target: z
           .object({
-            metric: z.string().min(1).max(100),
+            metric: nt(z.string().min(1).max(100)),
             target: z.number().finite(),
             window: z.string().regex(CONTRACT_WINDOW_RE),
           })
@@ -263,8 +306,51 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
           .refine((d) => Math.round(d * 1_000_000) >= 1, 'budget must be at least $0.000001')
           .describe('Declared spend limit in dollars per period (recorded, not enforced)'),
         budget_period: z.enum(['daily', 'weekly', 'monthly']).describe('Budget period'),
-        owner: z.string().min(1).max(320).describe('User id or email accountable for this agent'),
-        notes: z.string().max(2000).optional().describe('Optional note recorded on this version'),
+        owner: nt(z.string().min(1).max(320)).describe(
+          'User id or email accountable for this agent'
+        ),
+        human_baseline: z
+          .object({
+            cost_per_unit_usd: z
+              .number()
+              .finite()
+              .refine((d) => Math.round(d * 1_000_000) >= 1, 'must be at least $0.000001')
+              .describe('What one unit costs when a person does it, in dollars'),
+            minutes_per_unit: z
+              .number()
+              .positive()
+              .max(100_000)
+              .nullable()
+              .optional()
+              .describe("A person's minutes per unit, when known"),
+            basis: nt(z.string().min(1).max(500)).describe(
+              'How the figure was arrived at (e.g. time sheets, a quote)'
+            ),
+          })
+          .nullable()
+          .optional()
+          .describe(
+            'Optional, owner-stated, never measured. Omit to keep the current version’s; null clears it.'
+          ),
+        vendor_name: nt(z.string().min(1).max(VENDOR_NAME_MAX))
+          .nullable()
+          .optional()
+          .describe('Who you pay for this agent’s work (the AI vendor). null clears it.'),
+        billable_unit: nt(z.string().min(1).max(BILLABLE_UNIT_MAX))
+          .nullable()
+          .optional()
+          .describe(
+            "What the vendor bills per, in the vendor's words (e.g. 'resolution'). null clears it."
+          ),
+        vendor_resolved_definition: nt(z.string().min(1).max(VENDOR_DEFINITION_MAX))
+          .nullable()
+          .optional()
+          .describe(
+            `The vendor's own definition of "resolved", word for word. Stored unchanged and shown as ${VENDOR_DEFINITION_LABEL}. null clears it.`
+          ),
+        notes: nt(z.string().max(2000))
+          .optional()
+          .describe('Optional note recorded on this version'),
         policy_terms: z
           .record(z.unknown())
           .optional()
@@ -300,6 +386,10 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
       budget_dollars,
       budget_period,
       owner,
+      human_baseline,
+      vendor_name,
+      billable_unit,
+      vendor_resolved_definition,
       notes,
       policy_terms,
       policy_defaults,
@@ -319,6 +409,26 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
         },
         owner,
       };
+      // Optional terms: undefined = key omitted (the route keeps the current
+      // value); null = explicit clear. Dollars → MICRO-dollars like the budget.
+      if (human_baseline !== undefined) {
+        body.human_baseline =
+          human_baseline === null
+            ? null
+            : {
+                cost_per_unit_microdollars: Math.round(
+                  human_baseline.cost_per_unit_usd * 1_000_000
+                ),
+                ...(human_baseline.minutes_per_unit !== undefined
+                  ? { minutes_per_unit: human_baseline.minutes_per_unit }
+                  : {}),
+                basis: human_baseline.basis,
+              };
+      }
+      if (vendor_name !== undefined) body.vendor_name = vendor_name;
+      if (billable_unit !== undefined) body.billable_unit = billable_unit;
+      if (vendor_resolved_definition !== undefined)
+        body.vendor_resolved_definition = vendor_resolved_definition;
       if (notes !== undefined) body.notes = notes;
       if (policy_defaults !== undefined) body.policy_defaults = policy_defaults;
 

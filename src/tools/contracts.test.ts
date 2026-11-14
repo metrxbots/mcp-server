@@ -6,6 +6,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import type { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import type { MetrxApiClient } from '../services/api-client.js';
+import { z } from 'zod';
 import { registerContractTools } from './contracts.js';
 
 const mockApiClient = { post: vi.fn(), get: vi.fn(), patch: vi.fn() } as unknown as MetrxApiClient;
@@ -239,5 +240,209 @@ describe('Contract Tools', () => {
       );
       expect(text).toContain('CURRENT\n(no agent-scoped version)');
     });
+  });
+});
+
+describe('Contract Tools — human_baseline and vendor terms (mig 157)', () => {
+  let tools: Record<string, { inputSchema: any; handler: Function }>;
+  const LABEL = "the vendor's definition, not verified";
+  const DEFINITION = 'A chat the customer did not reopen within 72 hours.';
+  const vendorRow = {
+    ...row,
+    human_baseline: {
+      cost_per_unit_microdollars: 4_000_000,
+      minutes_per_unit: 12,
+      basis: 'time sheets',
+    },
+    vendor_name: 'Acme Support AI',
+    billable_unit: 'resolution',
+    vendor_resolved_definition: DEFINITION,
+  };
+  const base = {
+    agent_key: 'manco',
+    workload: 'extraction',
+    objective: 'Extract every DDQ field.',
+    unit_of_work: 'one DDQ extracted',
+    acceptance_criteria: [{ metric: 'field_accuracy', op: '>=', threshold: 0.97, window: '7d' }],
+    kpi_target: { metric: 'documents_accepted', target: 120, window: '30d' },
+    budget_dollars: 250,
+    budget_period: 'monthly',
+    owner: 'ops-lead@example.com',
+  };
+  const inputOf = (tool: string) => z.object(tools[tool].inputSchema.inputSchema);
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    const server = createMockMcpServer();
+    registerContractTools(server, mockApiClient);
+    tools = (server as any).__getTools();
+  });
+
+  describe('get_job_contract', () => {
+    it('returns the vendor terms, the definition verbatim and labelled "the vendor\'s definition, not verified"', async () => {
+      (mockApiClient.get as any).mockResolvedValue({
+        data: { agent_key: 'manco', current: [vendorRow], versions: [vendorRow] },
+      });
+      const text = (await tools['get_job_contract'].handler({ agent_key: 'manco' })).content[0]
+        .text;
+      expect(text).toContain('Vendor: Acme Support AI');
+      expect(text).toContain('Vendor bills per: resolution');
+      expect(text).toContain(`(${LABEL}): ${JSON.stringify(DEFINITION)}`);
+      // The label is on the same line as the definition, not somewhere else.
+      const line = text.split('\n').find((l: string) => l.includes(DEFINITION))!;
+      expect(line).toContain(LABEL);
+    });
+
+    it('shows the human baseline as owner-stated', async () => {
+      (mockApiClient.get as any).mockResolvedValue({
+        data: { agent_key: 'manco', current: [vendorRow], versions: [vendorRow] },
+      });
+      const text = (await tools['get_job_contract'].handler({ agent_key: 'manco' })).content[0]
+        .text;
+      expect(text).toContain(
+        'Human baseline: $4.00 per unit, 12 min (owner-stated, not measured; basis: time sheets)'
+      );
+    });
+
+    it('prints no vendor lines (and no label) for a version without vendor terms', async () => {
+      (mockApiClient.get as any).mockResolvedValue({
+        data: { agent_key: 'manco', current: [row], versions: [row] },
+      });
+      const text = (await tools['get_job_contract'].handler({ agent_key: 'manco' })).content[0]
+        .text;
+      expect(text).not.toContain('Vendor');
+      expect(text).not.toContain(LABEL);
+      expect(text).not.toContain('Human baseline');
+    });
+
+    it('description says the definition is labelled not verified', () => {
+      expect(tools['get_job_contract'].inputSchema.description).toContain(LABEL);
+    });
+  });
+
+  describe('set_job_contract', () => {
+    it('accepts human_baseline and sends micro-dollars on the wire', async () => {
+      (mockApiClient.post as any).mockResolvedValue({ data: vendorRow });
+      await tools['set_job_contract'].handler({
+        ...base,
+        human_baseline: { cost_per_unit_usd: 4.25, minutes_per_unit: 12, basis: 'time sheets' },
+      });
+      const body = (mockApiClient.post as any).mock.calls[0][1];
+      expect(body.human_baseline).toEqual({
+        cost_per_unit_microdollars: 4_250_000,
+        minutes_per_unit: 12,
+        basis: 'time sheets',
+      });
+    });
+
+    it('omits minutes_per_unit from the wire when not given', async () => {
+      (mockApiClient.post as any).mockResolvedValue({ data: vendorRow });
+      await tools['set_job_contract'].handler({
+        ...base,
+        human_baseline: { cost_per_unit_usd: 4, basis: 'quote' },
+      });
+      expect((mockApiClient.post as any).mock.calls[0][1].human_baseline).toEqual({
+        cost_per_unit_microdollars: 4_000_000,
+        basis: 'quote',
+      });
+    });
+
+    it('sends the three vendor fields, the definition unchanged', async () => {
+      (mockApiClient.post as any).mockResolvedValue({ data: vendorRow });
+      await tools['set_job_contract'].handler({
+        ...base,
+        vendor_name: 'Acme Support AI',
+        billable_unit: 'resolution',
+        vendor_resolved_definition: `  ${DEFINITION}  `,
+      });
+      const body = (mockApiClient.post as any).mock.calls[0][1];
+      expect(body.vendor_name).toBe('Acme Support AI');
+      expect(body.billable_unit).toBe('resolution');
+      expect(body.vendor_resolved_definition).toBe(`  ${DEFINITION}  `);
+    });
+
+    it('omitted optionals are absent from the body (so an edit keeps the current values); null is sent as null (clear)', async () => {
+      (mockApiClient.post as any).mockResolvedValue({ data: row });
+      await tools['set_job_contract'].handler(base);
+      let body = (mockApiClient.post as any).mock.calls[0][1];
+      for (const k of [
+        'human_baseline',
+        'vendor_name',
+        'billable_unit',
+        'vendor_resolved_definition',
+      ]) {
+        expect(body).not.toHaveProperty(k);
+      }
+      await tools['set_job_contract'].handler({
+        ...base,
+        human_baseline: null,
+        vendor_name: null,
+        billable_unit: null,
+        vendor_resolved_definition: null,
+      });
+      body = (mockApiClient.post as any).mock.calls[1][1];
+      expect(body).toMatchObject({
+        human_baseline: null,
+        vendor_name: null,
+        billable_unit: null,
+        vendor_resolved_definition: null,
+      });
+    });
+
+    it('the input schema enforces the caps (200 / 100 / 2000) and rejects a sub-micro-dollar baseline', () => {
+      const schema = inputOf('set_job_contract');
+      const ok = (extra: object) => schema.safeParse({ ...base, ...extra }).success;
+      expect(ok({ vendor_name: 'a'.repeat(200) })).toBe(true);
+      expect(ok({ vendor_name: 'a'.repeat(201) })).toBe(false);
+      expect(ok({ billable_unit: 'a'.repeat(100) })).toBe(true);
+      expect(ok({ billable_unit: 'a'.repeat(101) })).toBe(false);
+      expect(ok({ vendor_resolved_definition: 'a'.repeat(2000) })).toBe(true);
+      expect(ok({ vendor_resolved_definition: 'a'.repeat(2001) })).toBe(false);
+      expect(ok({ human_baseline: { cost_per_unit_usd: 0, basis: 'x' } })).toBe(false);
+      expect(ok({ human_baseline: { cost_per_unit_usd: 4, basis: '' } })).toBe(false);
+    });
+
+    it('its published result echoes the labelled definition from the returned row', async () => {
+      (mockApiClient.post as any).mockResolvedValue({ data: vendorRow });
+      const text = (
+        await tools['set_job_contract'].handler({ ...base, vendor_resolved_definition: DEFINITION })
+      ).content[0].text;
+      expect(text).toContain(`(${LABEL}): ${JSON.stringify(DEFINITION)}`);
+    });
+  });
+});
+
+describe('Contract Tools — NUL guard (set_job_contract)', () => {
+  it.each([
+    'agent_key',
+    'workload',
+    'objective',
+    'unit_of_work',
+    'owner',
+    'notes',
+    'vendor_name',
+    'billable_unit',
+    'vendor_resolved_definition',
+  ])('rejects U+0000 in %s with a clear message', (field) => {
+    const server = createMockMcpServer();
+    registerContractTools(server, mockApiClient);
+    const tools = (server as any).__getTools();
+    const schema = z.object(tools['set_job_contract'].inputSchema.inputSchema);
+    const good = {
+      agent_key: 'manco',
+      workload: 'extraction',
+      objective: 'Extract every DDQ field.',
+      unit_of_work: 'one DDQ extracted',
+      acceptance_criteria: [{ metric: 'field_accuracy', op: '>=', threshold: 0.97, window: '7d' }],
+      kpi_target: { metric: 'documents_accepted', target: 120, window: '30d' },
+      budget_dollars: 250,
+      budget_period: 'monthly',
+      owner: 'ops-lead@example.com',
+    };
+    expect(schema.safeParse(good).success).toBe(true);
+    const r = schema.safeParse({ ...good, [field]: 'a\u0000b' });
+    expect(r.success).toBe(false);
+    if (r.success) return;
+    expect(r.error.issues[0]!.message).toBe('must not contain a NUL (U+0000) character');
   });
 });

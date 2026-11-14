@@ -18,8 +18,12 @@ agent against this contract.
    - `owner`: the accountable person (name or email). Required.
    - Optional: `agent_key`, `workload`, `objective`, `unit_of_work`,
      `budget_usd` with `budget_period` (`daily`, `weekly`, `monthly`),
-     `human_baseline` (`cost_per_unit_usd`, optional `minutes_per_unit`,
+     `vendor_name`, `billable_unit` (what the vendor bills per, such as
+     `resolution`) and `vendor_resolved_definition` (the vendor's own wording,
+     copied word for word), `human_baseline` (`cost_per_unit_usd`, optional `minutes_per_unit`,
      and `basis`, which says where the number comes from), `notes`.
+     Do not guess the vendor terms either: ask for the vendor's wording, and pass
+     it through unchanged.
      Do not guess the human baseline. If the person has no number, leave
      `human_baseline` out; the review will show "insufficient data" for the
      comparison, which is the honest state.
@@ -29,6 +33,9 @@ agent against this contract.
    - The `draft` as a readable contract: objective, unit of work,
      acceptance criteria, budget, human baseline (each owner-declared; the
      result's `label` is `proposal-not-measured`, say so).
+   - When the draft has `vendor_resolved_definition`, relay it with the
+     `vendor_resolved_definition_label` beside it ("the vendor's definition, not
+     verified"), never on its own.
    - `errors`: each one blocks publishing; say which field and why.
    - `warnings`: each one is a gap the person should know about (for
      example a missing baseline). Relay them; do not resolve them silently.
@@ -43,5 +50,8 @@ agent against this contract.
 
 - Every number in the contract is the person's own input and is labelled
   owner-declared. Do not present a template default as a measurement.
+- The vendor's definition of resolved is the vendor's claim. Show it word for
+  word and label it "the vendor's definition, not verified"; never present
+  it as something Metrx checked, and never reword it.
 - Do not promise what the contract will achieve. It is the yardstick, not
   the result.
