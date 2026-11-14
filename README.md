@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@metrxbot/mcp-server)](https://www.npmjs.com/package/@metrxbot/mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-The **Model Context Protocol (MCP) server** for [Metrx](https://metrxbot.com): how a company manages the AI agents it employs. Each agent gets a job contract, a scorecard against it, and a P&L: what it cost and what it produced. This server exposes those records as tools that any MCP-compatible client (Claude, GPT, Gemini, custom agents) can call. Version 0.6.0.
+The **Model Context Protocol (MCP) server** for [Metrx](https://metrxbot.com): how a company manages the AI agents it employs. Each agent gets a job contract, a scorecard against it, and a P&L: what it cost and what it produced. This server exposes those records as tools that any MCP-compatible client (Claude, GPT, Gemini, custom agents) can call. Version 0.6.1.
 
 This package is the single source for both transports: the npm package you run locally over stdio, and the hosted server at `https://metrxbot.com/api/mcp`. The public repository at https://github.com/metrxbots/mcp-server is a mirror, synced from the monorepo by `packages/mcp-server/scripts/publish-mirror.ts`. Contributors open pull requests against the monorepo; issues go to https://github.com/metrxbots/mcp-server/issues.
 
@@ -42,14 +42,14 @@ The desk plugin wraps the workforce tool set in six skills.
 claude plugin marketplace add metrxbots/mcp-server && claude plugin install metrx-desk@metrxbots
 ```
 
-Versions: this server is 0.6.0 (`@metrxbot/mcp-server`). The desk plugin (`metrx-desk`) and the TypeScript SDK (`@metrxbot/sdk`) are separate artefacts with their own version numbers and release schedules; each states its version in its own package.
+Versions: this server is 0.6.1 (`@metrxbot/mcp-server`). The desk plugin (`metrx-desk`) and the TypeScript SDK (`@metrxbot/sdk`) are separate artefacts with their own version numbers and release schedules; each states its version in its own package.
 
 | Command                           | What it does                                                                                                                                                                                      | Needs a key                 |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
 | `/metrx-desk:sample-review`       | The Northwind sample review (synthetic demo data), relayed with every figure's label                                                                                                              | No                          |
 | `/metrx-desk:draft-job-contract`  | Draft a job contract for one agent from a template (support_triage, sdr_qualification, internal_assistant, coding_patch); owner is required; publishing is a separate admin-scope step            | No                          |
 | `/metrx-desk:cost-per-resolution` | The two numbers on a per-resolution AI bill: price per billed resolution and, with total conversations, the billed share. Both are the vendor's own count, labelled vendor-reported, not Verified | No                          |
-| `/metrx-desk:check-vendor-bill`   | Reconcile a per-resolution vendor bill against your own records: matched, disputed, unmatched, outside coverage, with the disputed amount                                                         | No                          |
+| `/metrx-desk:check-vendor-bill`   | Reconcile a per-resolution vendor bill against your own records: matched, disputed, unmatched, uncounted, outside coverage, with the disputed amount                                              | No                          |
 | `/metrx-desk:connect-metrx`       | Create a key at Settings → Security, set METRX_API_KEY, restart, read your first review                                                                                                           | Creates one                 |
 | `/metrx-desk:weekly-decisions`    | Your decision queue; record expand, re_specify, combine or retire with a rationale                                                                                                                | Yes (read; write to record) |
 

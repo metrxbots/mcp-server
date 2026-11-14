@@ -156,30 +156,23 @@ export const CONTRACT_TEMPLATES = [
   'coding_patch',
 ] as const;
 
+/** Postgres TEXT/JSONB refuse U+0000; reject it here with a clear message instead of a server 500. */
+const noNul = (s: z.ZodString) =>
+  s.refine((v) => !v.includes('\u0000'), { message: 'must not contain a NUL (U+0000) character' });
+
 export const DraftJobContractInput = {
   template: z.enum(CONTRACT_TEMPLATES).describe('Which job template to start from.'),
-  agent_key: AGENT_KEY.optional().describe(
-    'The agent the contract will be published for (informational in the draft).'
-  ),
-  workload: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
+  agent_key: noNul(AGENT_KEY)
+    .optional()
+    .describe('The agent the contract will be published for (informational in the draft).'),
+  workload: noNul(z.string().trim().min(1).max(200))
     .optional()
     .describe('Defaults to agent_key, else the template key.'),
-  owner: z
-    .string()
-    .trim()
-    .min(1)
-    .max(320)
-    .describe('The person accountable for this agent (name or email).'),
-  objective: z.string().trim().min(1).max(2000).optional(),
-  unit_of_work: z
-    .string()
-    .trim()
-    .min(1)
-    .max(200)
+  owner: noNul(z.string().trim().min(1).max(320)).describe(
+    'The person accountable for this agent (name or email).'
+  ),
+  objective: noNul(z.string().trim().min(1).max(2000)).optional(),
+  unit_of_work: noNul(z.string().trim().min(1).max(200))
     .optional()
     .describe("What one unit is, e.g. 'resolved ticket'."),
   budget_usd: z.number().positive().max(10_000_000).optional(),
@@ -188,11 +181,26 @@ export const DraftJobContractInput = {
     .object({
       cost_per_unit_usd: z.number().min(0).max(1_000_000),
       minutes_per_unit: z.number().min(0).max(100_000).nullable().optional(),
-      basis: z.string().trim().min(1).max(500).describe('Where the baseline number comes from.'),
+      basis: noNul(z.string().trim().min(1).max(500)).describe(
+        'Where the baseline number comes from.'
+      ),
     })
     .optional()
     .describe('What the same unit costs when a person does it; the ROI comparison needs it.'),
-  notes: z.string().trim().max(2000).optional(),
+  vendor_name: noNul(z.string().trim().min(1).max(200))
+    .optional()
+    .describe('Who you pay for the agent’s work (the AI vendor).'),
+  billable_unit: noNul(z.string().trim().min(1).max(100))
+    .optional()
+    .describe(
+      "What the vendor bills per, in the vendor's words, e.g. 'resolution' or 'conversation'."
+    ),
+  vendor_resolved_definition: noNul(z.string().min(1).max(2000))
+    .optional()
+    .describe(
+      'The vendor\'s own definition of "resolved", word for word. Kept unchanged and shown as the vendor\'s definition, not verified.'
+    ),
+  notes: noNul(z.string().trim().max(2000)).optional(),
 };
 
 const BILL_LINE = z
@@ -415,7 +423,9 @@ export function registerWorkforceTools(
       description:
         'Draft a job contract for an AI agent from a template (support_triage, ' +
         'sdr_qualification, internal_assistant, coding_patch): objective, unit of work, ' +
-        'acceptance criteria, budget, and the human baseline for ROI. Returns the draft to ' +
+        'acceptance criteria, budget, the human baseline for ROI, and optional vendor terms ' +
+        "(vendor_name, billable_unit, and the vendor's own definition of resolved, carried " +
+        "verbatim and labelled the vendor's definition, not verified). Returns the draft to " +
         'publish plus validation errors and warnings. A pure function over your input: ' +
         'reads nothing, stores nothing, needs no key. Publishing the draft is a separate ' +
         "step (set_job_contract, 'admin' scope).",
@@ -437,8 +447,9 @@ export function registerWorkforceTools(
       title: 'Check Vendor Bill',
       description:
         "Reconcile an AI vendor's per-resolution bill against your own records: which billed " +
-        'units your ledger shows as resolved, rejected, reopened, outside coverage, or ' +
-        'unknown, and the disputed amount. A pure function over the lines you pass: reads ' +
+        'units sort into matched, disputed (your ledger shows it reopened), unmatched, ' +
+        'uncounted (a person rejected it) or outside coverage, and the disputed amount. ' +
+        'A pure function over the lines you pass: reads ' +
         'nothing, stores nothing, needs no key. Paste the bill lines and your ledger events.',
       inputSchema: CheckVendorBillInput,
       annotations: { ...PURE },

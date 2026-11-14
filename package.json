@@ -1,6 +1,6 @@
 {
   "name": "@metrxbot/mcp-server",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Metrx MCP Server — optimization and cost-intelligence tools for AI agents",
   "type": "module",
   "main": "dist/index.js",
