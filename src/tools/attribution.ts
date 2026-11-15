@@ -118,7 +118,7 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
         'Calculate return on investment for an agent. Shows total costs (LLM API calls), ' +
         'total outcomes (attributed business value), ROI multiplier, and breakdown by model and outcome type. ' +
         'Useful for identifying which agents generate the most value per dollar spent. ' +
-        'Do NOT use for fleet-wide ROI — use generate_roi_audit for that.',
+        'Do NOT use for ROI across all agents — use generate_roi_audit for that.',
       inputSchema: {
         agent_id: z.string().uuid().describe('The agent UUID to calculate ROI for'),
         days: z
@@ -208,16 +208,16 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       if (data.roi_multiplier >= 1) {
         lines.push(
           '',
-          `> ✅ This agent generates $${data.roi_multiplier.toFixed(
+          `> ✅ Attributed: $${data.roi_multiplier.toFixed(
             2
-          )} in value for every $1 spent.`
+          )} of outcome value for every $1 this agent spent.`
         );
       } else if (data.roi_multiplier > 0) {
         lines.push(
           '',
-          `> ⚠️ This agent returns ${(data.roi_multiplier * 100).toFixed(
+          `> ⚠️ Attributed: ${(data.roi_multiplier * 100).toFixed(
             0
-          )}¢ per $1 spent. Consider optimizing costs or improving outcome attribution.`
+          )}¢ of outcome value for every $1 this agent spent. Consider optimizing costs or improving outcome attribution.`
         );
       } else {
         lines.push('', `> 📊 No attributed outcomes yet. Connect outcomes to start measuring ROI.`);
@@ -243,7 +243,7 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
           .string()
           .uuid()
           .optional()
-          .describe('Optional: filter to specific agent (omit for fleet-wide)'),
+          .describe('Optional: filter to specific agent (omit for all agents)'),
         days: z
           .number()
           .int()
@@ -289,7 +289,7 @@ export function registerAttributionTools(server: McpServer, client: MetrxApiClie
       if (data.agent_id) {
         lines.push(`**Agent**: ${data.agent_id}`, '');
       } else {
-        lines.push('**Scope**: Fleet-wide (all agents)', '');
+        lines.push('**Scope**: All agents', '');
       }
 
       lines.push(`**Total Outcomes**: ${data.total_outcomes}`, '');

@@ -281,7 +281,7 @@ describe('Attribution Tools', () => {
         model: 'last_touch',
       });
 
-      expect(result.content[0].text).toContain('Fleet-wide (all agents)');
+      expect(result.content[0].text).toContain('**Scope**: All agents');
       expect(result.content[0].text).toContain('last_touch');
       expect(result.content[0].text).not.toContain('**Agent**:');
       expect(result.content[0].text).toContain('Agent 1');

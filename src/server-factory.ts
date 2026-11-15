@@ -323,7 +323,7 @@ export function createMcpServer(
     {
       title: 'Find Cost Savings',
       description:
-        'Discover optimization opportunities across your AI agent fleet. ' +
+        'Discover optimization opportunities across your AI agents. ' +
         'Identifies model downgrades, caching opportunities, and routing improvements.',
     },
     async () => ({

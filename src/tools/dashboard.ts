@@ -18,7 +18,7 @@ export function registerDashboardTools(server: McpServer, client: MetrxApiClient
     {
       title: 'Get Cost Summary',
       description:
-        'Get a comprehensive cost summary for your AI agent fleet. ' +
+        'Get a comprehensive cost summary across your AI agents. ' +
         'Returns total spend, call counts, error rates, agent breakdown, ' +
         'revenue attribution (if available), and optimization opportunities. ' +
         'Use this as the starting point for understanding your agent economics. ' +
@@ -133,7 +133,7 @@ export function registerDashboardTools(server: McpServer, client: MetrxApiClient
       description:
         'Get detailed information about a specific agent including its model, ' +
         'framework, category, outcome configuration, and failure risk score. ' +
-        'Do NOT use for fleet-wide overviews — use get_cost_summary instead.',
+        'Do NOT use for overviews across all agents — use get_cost_summary instead.',
       inputSchema: {
         agent_id: z.string().uuid().describe('The agent UUID to look up'),
       },

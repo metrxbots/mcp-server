@@ -18,7 +18,7 @@ export function registerAlertTools(server: McpServer, client: MetrxApiClient): v
     {
       title: 'Get Alerts',
       description:
-        'Get active alerts and notifications for your agent fleet. ' +
+        'Get active alerts and notifications across your agents. ' +
         'Includes cost spikes, error rate increases, budget warnings, ' +
         'and system health notifications. Optionally filter by severity. ' +
         'Do NOT use for forward-looking risk — use get_failure_predictions for that.',

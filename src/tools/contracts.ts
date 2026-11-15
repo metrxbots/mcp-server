@@ -303,7 +303,10 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
         budget_dollars: z
           .number()
           .positive()
-          .refine((d) => Math.round(d * 1_000_000) >= 1, 'budget must be at least $0.000001')
+          .refine(
+            (d) => Math.round(d * 1_000_000) >= 1,
+            'budget must be at least 0.000001 dollars (one micro-dollar)'
+          )
           .describe('Declared spend limit in dollars per period (recorded, not enforced)'),
         budget_period: z.enum(['daily', 'weekly', 'monthly']).describe('Budget period'),
         owner: nt(z.string().min(1).max(320)).describe(
@@ -314,7 +317,10 @@ export function registerContractTools(server: McpServer, client: MetrxApiClient)
             cost_per_unit_usd: z
               .number()
               .finite()
-              .refine((d) => Math.round(d * 1_000_000) >= 1, 'must be at least $0.000001')
+              .refine(
+                (d) => Math.round(d * 1_000_000) >= 1,
+                'must be at least 0.000001 dollars (one micro-dollar)'
+              )
               .describe('What one unit costs when a person does it, in dollars'),
             minutes_per_unit: z
               .number()

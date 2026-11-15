@@ -50,7 +50,7 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
     {
       title: 'Run Cost Leak Scan',
       description:
-        'Run a comprehensive cost leak audit across your entire agent fleet. ' +
+        'Run a comprehensive cost leak audit across all your agents. ' +
         'Identifies 7 types of cost inefficiencies: idle agents, model overprovisioning, ' +
         'missing caching, high error rates, context bloat, missing budgets, and ' +
         `cross-provider arbitrage opportunities (covers ${getCoveredProviders().join(', ')}). ` +
@@ -63,7 +63,7 @@ export function registerCostLeakDetectorTools(server: McpServer, client: MetrxAp
           .string()
           .uuid()
           .optional()
-          .describe('Scan a specific agent instead of the entire fleet'),
+          .describe('Scan a specific agent instead of all agents'),
         include_low_severity: z
           .boolean()
           .default(false)
@@ -174,7 +174,7 @@ function formatCostLeakReport(report: CostLeakReport, includeLow: boolean): stri
     `**Agents Scanned**: ${report.total_agents_scanned}`,
     `**Leaks Found**: ${report.total_leaks_found}`,
     `**Estimated Monthly Waste**: ${formatCents(report.total_estimated_waste_monthly_cents)}`,
-    `**Fleet Health Score**: ${report.health_score}/100 ${getHealthEmoji(report.health_score)}`,
+    `**Overall Health Score**: ${report.health_score}/100 ${getHealthEmoji(report.health_score)}`,
   ];
 
   const findings = includeLow
@@ -183,7 +183,7 @@ function formatCostLeakReport(report: CostLeakReport, includeLow: boolean): stri
 
   if (findings.length === 0) {
     lines.push('');
-    lines.push('✅ No significant cost leaks detected. Your fleet is running efficiently!');
+    lines.push('✅ No significant cost leaks detected in this scan.');
     return lines.join('\n');
   }
 

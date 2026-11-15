@@ -78,7 +78,7 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
       description:
         'Get the current status of all budget configurations. ' +
         'Shows spending vs limits, warning/exceeded counts, and enforcement modes. ' +
-        'Use this to monitor spending governance across your agent fleet. ' +
+        'Use this to monitor spending governance across your agents. ' +
         'Read-only. Budget changes (set_budget, update_budget_mode) need an API key with the ' +
         "'admin' scope.",
       inputSchema: {},
@@ -131,7 +131,7 @@ export function registerBudgetTools(server: McpServer, client: MetrxApiClient): 
         limit_dollars: z
           .number()
           .positive()
-          .describe('Spending limit in dollars (e.g., 100 for $100/month)'),
+          .describe('Spending limit in dollars (for example 100 means 100 dollars per period)'),
         warning_pct: z
           .number()
           .int()
