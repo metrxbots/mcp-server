@@ -12,7 +12,7 @@ description: >
   optimization engine recommends cheaper models, and a draft experiment records
   the change to test. Free tier, one-command install. Works with Claude Desktop,
   Cursor, Windsurf, and any MCP client.
-version: "0.6.1"
+version: "0.6.2"
 
 startCommand:
   type: stdio
@@ -21,7 +21,7 @@ startCommand:
     properties:
       metrxApiKey:
         type: string
-        description: "Your Metrx API key (get one free at metrxbot.com). Leave empty to try the public desk tools over the Northwind sample (--demo)."
+        description: "Your Metrx API key (get one free at metrxbot.com). Leave empty to try the public desk tools over the synthetic Northwind sample (--demo)."
 
   commandFunction: |-
     (config) => (config.metrxApiKey

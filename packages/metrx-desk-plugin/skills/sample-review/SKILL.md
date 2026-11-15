@@ -63,7 +63,7 @@ events land.
 
 ## Rules
 
-- Relay the document; do not summarize it into a verdict about Northwind.
+- Relay the document; do not summarize the synthetic Northwind sample into a verdict.
 - No percentage, saving, or ROI that is not literally in the document with
   its label.
 - Three lines about the page are enough when the person only asked what

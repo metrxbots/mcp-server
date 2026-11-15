@@ -29,7 +29,7 @@
  *   }
  *
  * Flags:
- *   --demo          The public desk tools over the Northwind sample (no API key needed)
+ *   --demo          The public desk tools over the synthetic Northwind sample (no API key needed)
  *   --auth          Interactive login (opens browser, saves key)
  *   --test          Verify API key & connection
  *   --setup-claude  Auto-configure Claude Desktop, Cursor, or VS Code
@@ -64,7 +64,7 @@ if (process.argv.includes('--setup-claude')) {
     process.exit(1);
   });
 } else if (process.argv.includes('--demo')) {
-  // ── --demo flag: the public desk tools over the live Northwind sample, no key ──
+  // ── --demo flag: the public desk tools over the live synthetic Northwind sample, no key ──
   runDemoServer().catch((err) => {
     console.error('Fatal error:', err);
     process.exit(1);
@@ -201,7 +201,7 @@ async function runServer(): Promise<void> {
 
 /**
  * Start the MCP server in demo mode: no API key. Only the public desk tools
- * are listed (MCP_TOOL_AUTH 'public'); they read the live Northwind sample
+ * are listed (MCP_TOOL_AUTH 'public'); they read the live synthetic Northwind sample
  * review and run the pure drafting/checking functions over the SAME api/v1
  * routes the hosted endpoint uses (HttpKeylessClient), so what a `--demo`
  * caller sees is what https://metrxbot.com/review/demo shows. Each call is
@@ -215,7 +215,7 @@ async function runDemoServer(): Promise<void> {
     `\n${CYAN}${BOLD}  Metrx MCP Server — Demo Mode${RESET}  ${DIM}v${SERVER_VERSION}${RESET}\n`
   );
   console.error(
-    `  ${GREEN}✓${RESET} No API key needed: the public desk tools over the Northwind sample\n`
+    `  ${GREEN}✓${RESET} No API key needed: the public desk tools over the synthetic Northwind sample\n`
   );
   console.error(`  ${BOLD}What you can call${RESET}`);
   console.error(

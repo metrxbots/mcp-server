@@ -222,7 +222,7 @@ export type McpCallerAuthMode = 'key' | 'public' | 'oauth';
 /**
  * get_workforce_review's default `org` for a caller (PR C review M2). A
  * connector user signed in as themselves, so "the workforce review" means
- * their own org; a key or keyless caller keeps the public Northwind sample as
+ * their own org; a key or keyless caller keeps the public synthetic Northwind sample as
  * the default (desk PR 1). /api/mcp/connect reads this too, so its analytics
  * `demo` flag cannot disagree with what the tool served.
  */

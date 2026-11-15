@@ -8,12 +8,12 @@
     "url": "https://github.com/metrxbots/mcp-server",
     "source": "github"
   },
-  "version": "0.6.1-1",
+  "version": "0.6.2-1",
   "packages": [
     {
       "registryType": "npm",
       "identifier": "@metrxbot/mcp-server",
-      "version": "0.6.1",
+      "version": "0.6.2",
       "transport": {
         "type": "stdio"
       }
@@ -30,7 +30,7 @@
       "headers": [
         {
           "name": "Authorization",
-          "description": "Bearer <your Metrx API key>. Optional: without it the public desk tools answer over the Northwind sample.",
+          "description": "Bearer <your Metrx API key>. Optional: without it the public desk tools answer over the synthetic Northwind sample.",
           "isRequired": false,
           "isSecret": true
         }

@@ -13,6 +13,12 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - **Workforce review over OAuth.** If you connect through OAuth, `metrx_get_workforce_review` reviews your own org by default. Pass `org=demo` to read the Northwind sample. API-key and keyless callers keep the old default, which is `demo`.
 
+## [0.6.2] - 2026-11-15
+
+### Changed
+- **The Northwind sample says it is synthetic, everywhere a client shows it.** The `--demo` banner and help text, both `org` descriptions on `metrx_get_workforce_review`, the `demo_unavailable` error message, the registry card (`server.json`), the Smithery manifest and the `sample-review` skill in `metrx-desk` now read "synthetic Northwind". No tool, schema, error `class` or `code` changed; only display text did.
+- Registry entry 0.6.2-1.
+
 ## [0.6.1] - 2026-11-14
 
 ### Added
