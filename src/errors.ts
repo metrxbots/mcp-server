@@ -74,7 +74,7 @@ export const MCP_ERRORS: Record<McpErrorClass, McpErrorRow> = {
     http: 503,
     message: 'demo_unavailable',
     user_message:
-      'The Northwind demo is being rebuilt right now. Try again in a few minutes, or run the review on your own data with a Metrx API key.',
+      'The synthetic Northwind demo is being rebuilt right now. Try again in a few minutes, or run the review on your own data with a Metrx API key.',
   },
   unknown_agent_key: {
     code: -32006,

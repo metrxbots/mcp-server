@@ -123,8 +123,8 @@ export function workforceReviewInput(authMode: McpCallerAuthMode = 'key') {
       .describe(
         signedIn
           ? "'me' (default) reviews your own org as you, with your role; " +
-              "'demo' reads the public Northwind sample review."
-          : "'demo' (default) reads the public Northwind sample review and needs no key; " +
+              "'demo' reads the public synthetic Northwind sample review."
+          : "'demo' (default) reads the public synthetic Northwind sample review and needs no key; " +
               "'me' reviews your own org and needs an API key with the 'read' scope."
       ),
     cursor: z
@@ -368,8 +368,8 @@ export function registerWorkforceTools(
   const orgSentence =
     defaultOrg === 'me'
       ? 'org=me (default) reviews your own org as you, with your role; org=demo reads ' +
-        'the public Northwind sample. '
-      : 'org=demo reads the public Northwind sample and needs no key; org=me reads your ' +
+        'the public synthetic Northwind sample. '
+      : 'org=demo reads the public synthetic Northwind sample and needs no key; org=me reads your ' +
         "own org and needs an API key with the 'read' scope. ";
   server.registerTool(
     'get_workforce_review',
