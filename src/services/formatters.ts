@@ -168,7 +168,7 @@ function appendSuggestionSections(lines: string[], suggestions: OptimizationSugg
  * shows — never a re-sum of the listed (top-N) suggestions.
  */
 export function formatFleetOptimizations(result: FleetSuggestionsResult): string {
-  const lines: string[] = [`## Fleet Optimization Recommendations`, ''];
+  const lines: string[] = [`## Optimization Recommendations (all agents)`, ''];
   const total = result.total_savings_cents ?? null;
   lines.push(
     total === null

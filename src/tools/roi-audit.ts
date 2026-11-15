@@ -85,7 +85,7 @@ export function registerROIAuditTools(server: McpServer, client: MetrxApiClient)
     {
       title: 'Generate ROI Audit Report',
       description:
-        'Generate a comprehensive ROI audit report for your AI agent fleet. ' +
+        'Generate a comprehensive ROI audit report across your AI agents. ' +
         'Includes per-agent cost/revenue breakdown, attribution confidence scores, ' +
         'optimization opportunities, and risk flags. Suitable for board reporting and compliance. ' +
         'Do NOT use for quick per-agent ROI checks — use get_task_roi for individual agents.',
@@ -104,7 +104,7 @@ export function registerROIAuditTools(server: McpServer, client: MetrxApiClient)
         agent_ids: z
           .array(z.string().uuid())
           .optional()
-          .describe('Specific agent IDs to include. Omit for full fleet audit.'),
+          .describe('Specific agent IDs to include. Omit to audit all agents.'),
       },
       annotations: {
         readOnlyHint: true,
@@ -250,7 +250,7 @@ export function registerROIAuditTools(server: McpServer, client: MetrxApiClient)
         `Generated: ${new Date(report.generated_at).toLocaleDateString()}`,
         `Period: Last ${windowDays} days`,
         '',
-        `## Fleet Summary`,
+        `## Summary (all agents)`,
         `- Total Agents: ${report.fleet_summary.total_agents}`,
         `- Total Cost (Measured): ${usd(totalCost)}`,
         `- Attributed Revenue: ${usd(totalRevenue)}`,

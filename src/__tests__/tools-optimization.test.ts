@@ -169,15 +169,16 @@ describe('get_optimization_recommendations Handler', () => {
     expect(result.content[0].text).toContain('already well-optimized');
   });
 
-  it('should return message when no fleet-wide suggestions', async () => {
+  it('says there are no recommendations, without claiming the agents are efficient', async () => {
     (mockClient.get as any).mockResolvedValueOnce({
       data: { status: 'no_suggestions', suggestions: [], total_savings_cents: 0 },
     });
 
     const result = await optRecommendationsHandler({});
 
-    expect(result.content[0].text).toContain('No fleet-wide optimization');
-    expect(result.content[0].text).toContain('efficiently');
+    expect(result.content[0].text).toContain('No optimization recommendations across your agents');
+    // An empty suggestion list is not evidence of efficiency (canon v2 §4.2).
+    expect(result.content[0].text).not.toMatch(/efficient/i);
   });
 
   it('should return formatted suggestions when available', async () => {

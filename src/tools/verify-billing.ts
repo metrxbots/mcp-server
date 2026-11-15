@@ -2,7 +2,7 @@
  * Verify Billing Tools (PR-2, master plan §15.2)
  *
  * The transacting surface of the MCP funnel:
- *   - get_balance       — verifications remaining (never "credits")
+ *   - get_balance       — verifications remaining (the unit is a verification, never a currency)
  *   - buy_verification  — UCP checkout URL + claim instructions
  *   - verify_switch     — spends one unit, returns an ASYNC handle (never blocks)
  *

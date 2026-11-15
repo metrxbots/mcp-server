@@ -51,7 +51,7 @@ export function registerHealthRankingsTools(server: McpServer, client: MetrxApiC
         'Returns health score, grade, and data completeness for all agents in the organization. ' +
         'Health scores are composite 0-100 scores blending cost efficiency, ROI, error rate, ' +
         'quality drift, failure risk, and latency. Grades: A (80-100), B (60-79), C (40-59), ' +
-        'D (20-39), F (0-19). Use this to get a fleet-wide health overview.',
+        'D (20-39), F (0-19). Use this for a health overview across all agents.',
       inputSchema: {},
       annotations: {
         readOnlyHint: true,
@@ -127,7 +127,7 @@ export function registerHealthRankingsTools(server: McpServer, client: MetrxApiC
         'grade (A-F), composite score on a 0-1 scale (a stored score when one exists, otherwise ' +
         'computed live from the last 30 days of metrics), data completeness (share of score inputs ' +
         'that had data; 0 = no data at all) and a stale flag ' +
-        '(no call in the last 48 hours). Fleet averages are computed here from the returned rows. ' +
+        '(no call in the last 48 hours). Averages across all agents are computed here from the returned rows. ' +
         'Use this to identify top and bottom performers.',
       inputSchema: {
         limit: z
@@ -179,7 +179,7 @@ export function registerHealthRankingsTools(server: McpServer, client: MetrxApiC
       const lines: string[] = [
         '# Agent Rankings',
         '',
-        `Fleet: ${rankings.length} agents | With data: ${withData.length} | ` +
+        `All agents: ${rankings.length} | With data: ${withData.length} | ` +
           `Avg score (agents with data): ${avg === null ? '-' : avg.toFixed(2)}`,
         '',
         '| Rank | Agent | Key | Grade | Score (0-1) | Data | Stale? |',

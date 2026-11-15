@@ -23,7 +23,7 @@ export function registerOptimizationTools(server: McpServer, client: MetrxApiCli
     {
       title: 'Get Optimization Recommendations',
       description:
-        'Get AI-powered cost optimization recommendations for a specific agent or your entire fleet. ' +
+        'Get cost optimization recommendations, computed by rule from your measured usage, for a specific agent or all your agents. ' +
         'Returns actionable suggestions including model switching, token guardrails, provider arbitrage, ' +
         'batch processing opportunities, and revenue intelligence insights. ' +
         'Each suggestion includes estimated monthly savings and confidence level. ' +
@@ -34,7 +34,7 @@ export function registerOptimizationTools(server: McpServer, client: MetrxApiCli
           .string()
           .uuid()
           .optional()
-          .describe('Specific agent to analyze. Omit for fleet-wide recommendations.'),
+          .describe('Specific agent to analyze. Omit for recommendations across all agents.'),
         include_revenue: z
           .boolean()
           .default(true)
@@ -54,19 +54,21 @@ export function registerOptimizationTools(server: McpServer, client: MetrxApiCli
         // fleet-wide view is /dashboard/suggestions — every agent's stored
         // row under the current savings definition, with the same total the
         // dashboard shows (savings definition v2).
-        const fleet = await client.get<FleetSuggestionsResult>('/dashboard/suggestions', {
+        const allAgents = await client.get<FleetSuggestionsResult>('/dashboard/suggestions', {
           limit: '10',
         });
-        if (fleet.error) {
+        if (allAgents.error) {
           return {
-            content: [{ type: 'text', text: `Error fetching recommendations: ${fleet.error}` }],
+            content: [{ type: 'text', text: `Error fetching recommendations: ${allAgents.error}` }],
             isError: true,
           };
         }
-        const data = fleet.data
+        const data = allAgents.data
           ? {
-              ...fleet.data,
-              suggestions: Array.isArray(fleet.data.suggestions) ? fleet.data.suggestions : [],
+              ...allAgents.data,
+              suggestions: Array.isArray(allAgents.data.suggestions)
+                ? allAgents.data.suggestions
+                : [],
             }
           : undefined;
         const recalculating = (data?.recalculating_agent_count ?? 0) > 0;
@@ -76,8 +78,7 @@ export function registerOptimizationTools(server: McpServer, client: MetrxApiCli
               {
                 type: 'text',
                 text:
-                  data?.message ??
-                  'No fleet-wide optimization recommendations. Your agents are running efficiently.',
+                  data?.message ?? 'No optimization recommendations across your agents right now.',
               },
             ],
           };

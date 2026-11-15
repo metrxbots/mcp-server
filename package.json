@@ -1,7 +1,7 @@
 {
   "name": "@metrxbot/mcp-server",
-  "version": "0.6.2",
-  "description": "Metrx MCP Server — optimization and cost-intelligence tools for AI agents",
+  "version": "0.6.3",
+  "description": "Metrx MCP server: manage the AI agents your company employs. Job contracts, scorecards, per-agent P&L and vendor bill checks.",
   "type": "module",
   "main": "dist/index.js",
   "exports": {

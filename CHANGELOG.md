@@ -13,6 +13,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - **Workforce review over OAuth.** If you connect through OAuth, `metrx_get_workforce_review` reviews your own org by default. Pass `org=demo` to read the Northwind sample. API-key and keyless callers keep the old default, which is `demo`.
 
+## [0.6.3] - 2026-11-15
+
+### Changed
+- **Tool output says what it means.** Prompts and tool output no longer call your agents a "fleet"; they say "all agents" or "your agents". An empty optimization result now reports that the analyzers found nothing to propose, instead of saying your agents are "running efficiently". The ROI line in `metrx_get_task_roi` carries its provenance label: "Attributed: $X of outcome value for every $1 this agent spent".
+- **`metrx_get_optimization_recommendations`** is described as computed by rule from your measured usage. It made no model call before either; the old "AI-powered" wording was wrong.
+- **Package and Smithery descriptions** now describe what Metrx does today: cost per agent, job contracts and scorecards, attributed outcomes, and model switches that never happen without your OK.
+- Registry entry 0.6.3-1.
+
+No tool, schema, error `class` or `code` changed; only display text did. If you pattern-match the old ROI or empty-state sentences, update the match.
+
 ## [0.6.2] - 2026-11-15
 
 ### Changed
