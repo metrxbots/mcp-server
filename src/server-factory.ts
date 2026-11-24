@@ -29,6 +29,7 @@ import { registerVerifyBillingTools } from './tools/verify-billing.js';
 import { registerLoopMetricsTools } from './tools/loop-metrics.js';
 import { registerContractTools } from './tools/contracts.js';
 import { registerWorkforceTools } from './tools/workforce.js';
+import { registerSelfTools } from './tools/self.js';
 import { RateLimiter } from './middleware/rate-limiter.js';
 import {
   mcpToolSummary,
@@ -37,6 +38,7 @@ import {
   mcpToolAuthMode,
   mcpToolSet,
   mcpToolOAuthAllowed,
+  mcpToolOAuthOnly,
   LEGACY_ENVELOPE_PENDING_NOTE,
   type McpCallerAuthMode,
   type McpToolName,
@@ -54,6 +56,8 @@ import {
  * authMode 'oauth': a signed-in user through an OAuth connector
  *   (/api/mcp/connect). Every tool except MCP_KEY_ONLY_TOOLS; descriptions
  *   carry no API-key sentence (the user has no key; their role still applies).
+ *   This is the ONLY mode that lists MCP_OAUTH_ONLY_TOOLS (the self view): its
+ *   routes are about the signed-in person and refuse API keys.
  * toolSet: a named subset (`tools/list ?set=workforce`); undefined = the full
  *   registry. Applied after the auth filter.
  * isDemo: append the demo CTA every fifth call (stdio --demo).
@@ -212,6 +216,11 @@ export function createMcpServer(
     // enriches its description later (verify-billing) has nothing to crash on.
     if (authMode === 'public' && toolAuth !== 'public') return SKIPPED_TOOL_HANDLE;
     if (authMode === 'oauth' && !mcpToolOAuthAllowed(bareName)) return SKIPPED_TOOL_HANDLE;
+    // The mirror of key-only: a tool about the signed-in person is listed for
+    // OAuth only. A key or keyless session never sees it, so a call to it is
+    // refused as an unknown tool (the SDK's own answer) rather than reaching a
+    // route that would 403 api_key_refused.
+    if (authMode !== 'oauth' && mcpToolOAuthOnly(bareName)) return SKIPPED_TOOL_HANDLE;
     if (toolSet && !toolSet.has(bareName as McpToolName)) return SKIPPED_TOOL_HANDLE;
 
     // The scope sentence is for key holders: a public tool's description says
@@ -280,6 +289,8 @@ export function createMcpServer(
   // Manager's desk (plan §2). SDK-import-free like loop-metrics; the public
   // three answer without a key through the keyless clients.
   registerWorkforceTools(server as any, client, { authMode });
+  // Self view: listed for OAuth callers only (the factory skips it otherwise).
+  registerSelfTools(server as any, client);
 
   // ── MCP Prompts ──
   // Pre-built prompt templates that help users interact with Metrx tools.

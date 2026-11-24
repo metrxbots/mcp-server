@@ -6,13 +6,15 @@ name: 'Metrx MCP Server'
 description: >
   Metrx is how a company manages the AI agents it employs, from any source you
   can export. Each agent gets a job contract, a scorecard against it, and a P&L:
-  what it cost and what it produced. 42 MCP tools: workforce review, job
+  what it cost and what it produced. 43 MCP tools: workforce review, job
   contracts and scorecards, vendor bill checks, measured cost per agent from the
   SDKs and OTel, budgets and alerts, cost-leak scans, and model-switch
   experiments that change nothing without your OK. With no API key, the public
-  desk tools answer over the synthetic Northwind sample (--demo). Works with
+  desk tools answer over the synthetic Northwind sample (--demo). One tool,
+  metrx_get_my_access, is listed only to a person signed in through the connector,
+  never to an API key. Works with
   Claude Desktop, Cursor, Windsurf and any MCP client.
-version: '0.6.3'
+version: '0.6.4'
 
 startCommand:
   type: stdio

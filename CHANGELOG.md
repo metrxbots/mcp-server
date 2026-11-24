@@ -13,6 +13,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - **Workforce review over OAuth.** If you connect through OAuth, `metrx_get_workforce_review` reviews your own org by default. Pass `org=demo` to read the Northwind sample. API-key and keyless callers keep the old default, which is `demo`.
 
+## [0.6.4] - 2026-11-23
+
+### Added
+- **`metrx_get_my_access`**: a self view for a person signed in through the connector. It shows your role, the teams you belong to, and who has opened your page. It lists only your own teams. It calls `GET /api/me` and `GET /api/me/notices`, which refuse API keys, so it is listed only for OAuth sessions; a key or keyless session never sees it.
+
 ## [0.6.3] - 2026-11-15
 
 ### Changed

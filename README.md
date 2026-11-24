@@ -5,7 +5,7 @@
 [![npm version](https://img.shields.io/npm/v/@metrxbot/mcp-server)](https://www.npmjs.com/package/@metrxbot/mcp-server)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
-The **Model Context Protocol (MCP) server** for [Metrx](https://metrxbot.com): how a company manages the AI agents it employs. Each agent gets a job contract, a scorecard against it, and a P&L: what it cost and what it produced. This server exposes those records as tools that any MCP-compatible client (Claude, GPT, Gemini, custom agents) can call. Version 0.6.3.
+The **Model Context Protocol (MCP) server** for [Metrx](https://metrxbot.com): how a company manages the AI agents it employs. Each agent gets a job contract, a scorecard against it, and a P&L: what it cost and what it produced. This server exposes those records as tools that any MCP-compatible client (Claude, GPT, Gemini, custom agents) can call. Version 0.6.4.
 
 This package is the single source for both transports: the npm package you run locally over stdio, and the hosted server at `https://metrxbot.com/api/mcp`. The public repository at https://github.com/metrxbots/mcp-server is a mirror, synced from the monorepo by `packages/mcp-server/scripts/publish-mirror.ts`. Contributors open pull requests against the monorepo; issues go to https://github.com/metrxbots/mcp-server/issues.
 
@@ -42,7 +42,7 @@ The desk plugin wraps the workforce tool set in six skills.
 claude plugin marketplace add metrxbots/mcp-server && claude plugin install metrx-desk@metrxbots
 ```
 
-Versions: this server is 0.6.3 (`@metrxbot/mcp-server`). The desk plugin (`metrx-desk`) and the TypeScript SDK (`@metrxbot/sdk`) are separate artefacts with their own version numbers and release schedules; each states its version in its own package.
+Versions: this server is 0.6.4 (`@metrxbot/mcp-server`). The desk plugin (`metrx-desk`) and the TypeScript SDK (`@metrxbot/sdk`) are separate artefacts with their own version numbers and release schedules; each states its version in its own package.
 
 | Command                           | What it does                                                                                                                                                                                      | Needs a key                 |
 | --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------- |
@@ -57,7 +57,7 @@ The full walkthrough, including the labels every figure carries and the plain HT
 
 ## Tools
 
-The tool registry is published at https://metrxbot.com/.well-known/agent-card.json: names, descriptions, domains, the public subset that answers without a key, and the named tool sets. That file is the authoritative list; this README does not repeat it. Every tool's description ends with the scope it needs (`read`, `write` or `admin`).
+The tool registry is published at https://metrxbot.com/.well-known/agent-card.json: names, descriptions, domains, the public subset that answers without a key, and the named tool sets. That file is the authoritative list; this README does not repeat it. Every tool's description ends with the scope it needs (`read`, `write` or `admin`). The one exception is `metrx_get_my_access`, which is listed only to a person signed in through the connector (never to an API key or the keyless demo): it shows your own role, teams and who opened your page.
 
 Tool names carry the `metrx_` prefix. The desk's public tools are `metrx_get_workforce_review`, `metrx_draft_job_contract`, `metrx_cost_per_resolution` and `metrx_check_vendor_bill`. Signed-in desk tools include `metrx_get_decision_queue`, `metrx_record_decision`, `metrx_get_scorecard`, `metrx_get_job_contract` and `metrx_set_job_contract`; cost reads such as `metrx_get_cost_summary` sit alongside them. A job contract is recorded, not enforced at runtime: publishing one blocks no spend or traffic.
 
