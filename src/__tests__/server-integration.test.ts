@@ -446,7 +446,10 @@ import {
   WORKFORCE_TOOL_SET,
   mcpScopeSentence,
   MCP_KEY_ONLY_TOOLS,
+  MCP_OAUTH_ONLY_TOOLS,
+  MCP_TOOL_SETS,
   mcpToolOAuthAllowed,
+  mcpToolOAuthOnly,
 } from '../../dist/tool-registry-facts';
 
 describe('Tool scopes (W1-4b)', () => {
@@ -460,7 +463,9 @@ describe('Tool scopes (W1-4b)', () => {
     const server = createMcpServer(fakeClient as any);
     const registered = (server as any)._registeredTools as Record<string, any>;
     const names = Object.keys(registered);
-    expect(names).toHaveLength(MCP_TOOL_COUNT);
+    // Key mode lists everything except the OAuth-only self view.
+    expect(names).toHaveLength(MCP_TOOL_COUNT - MCP_OAUTH_ONLY_TOOLS.length);
+    expect(names).not.toContain('metrx_get_my_access');
     expect(Object.keys(MCP_TOOL_SCOPES)).toHaveLength(MCP_TOOL_COUNT);
     expect(Object.keys(MCP_TOOL_AUTH)).toHaveLength(MCP_TOOL_COUNT);
     for (const name of names) {
@@ -509,6 +514,31 @@ describe('Tool scopes (W1-4b)', () => {
     expect(mcpToolOAuthAllowed('metrx_buy_verification')).toBe(false);
     expect(mcpToolOAuthAllowed('get_workforce_review')).toBe(true);
     expect(mcpToolOAuthAllowed('no_such_tool')).toBe(false);
+  });
+
+  it('the self view is OAuth-only: hidden in key and public modes, present in oauth, key-only tools stay hidden', () => {
+    expect(MCP_OAUTH_ONLY_TOOLS).toEqual(['get_my_access']);
+    expect(mcpToolOAuthOnly('metrx_get_my_access')).toBe(true);
+    expect(mcpToolOAuthOnly('get_cost_summary')).toBe(false);
+    const list = (opts?: any) =>
+      Object.keys(
+        (createMcpServer(fakeClient as any, opts) as any)._registeredTools as Record<string, any>
+      );
+    expect(list()).not.toContain('metrx_get_my_access');
+    expect(list({ authMode: 'key' })).not.toContain('metrx_get_my_access');
+    expect(list({ authMode: 'public' })).not.toContain('metrx_get_my_access');
+    expect(list({ authMode: 'oauth' })).toContain('metrx_get_my_access');
+    expect(list({ authMode: 'oauth' })).not.toContain('metrx_buy_verification');
+    // Listed means described without the API-key sentence, with its scope in _meta.
+    const tool = (createMcpServer(fakeClient as any, { authMode: 'oauth' }) as any)
+      ._registeredTools['metrx_get_my_access'];
+    expect(tool.description).not.toMatch(/API key with/);
+    expect(tool._meta['metrx/auth_mode']).toBe('key');
+    // The named set is exactly the self tool; only oauth can fill it.
+    expect([...MCP_TOOL_SETS.self]).toEqual(['get_my_access']);
+    expect(list({ authMode: 'oauth', toolSet: 'self' })).toEqual(['metrx_get_my_access']);
+    expect(list({ authMode: 'key', toolSet: 'self' })).toEqual([]);
+    expect(list({ authMode: 'public', toolSet: 'self' })).toEqual([]);
   });
 
   it("oauth mode: the workforce review defaults to the caller's own org (PR C review M2)", () => {

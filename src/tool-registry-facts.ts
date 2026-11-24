@@ -58,6 +58,10 @@ export const MCP_TOOLS_BY_DOMAIN = {
   ],
   optimization: ['get_optimization_recommendations'],
   'roi-audit': ['generate_roi_audit'],
+  // Self view (enterprise foundation): what Metrx holds about the signed-in
+  // person and who opened their page. OAuth-only (MCP_OAUTH_ONLY_TOOLS): both
+  // routes it calls refuse API keys.
+  self: ['get_my_access'],
   'upgrade-business-case': ['get_upgrade_business_case'],
   'upgrade-justification': ['get_upgrade_justification'],
   'verify-billing': ['get_balance', 'buy_verification', 'verify_switch'],
@@ -181,6 +185,9 @@ export const MCP_TOOL_SCOPES: Record<string, McpToolScope> = {
   check_vendor_bill: 'read',
   cost_per_resolution: 'read',
   record_decision: 'write',
+  // self. OAuth-only: no API key can call it (the routes refuse keys), so the
+  // scope is the uniform-axis placeholder, never presented to a key holder.
+  get_my_access: 'read',
 };
 
 /** Look up a tool's declared scope by prefixed or unprefixed name. */
@@ -271,6 +278,25 @@ export const PUBLIC_TOOL_COUNT: number = MCP_PUBLIC_MODE_TOOL_NAMES.length;
  */
 export const MCP_KEY_ONLY_TOOLS: readonly McpToolName[] = ['buy_verification'];
 
+/**
+ * The mirror of MCP_KEY_ONLY_TOOLS: tools ONLY an OAuth connector gets. They
+ * answer about the signed-in PERSON (GET /api/me, /api/me/notices), and those
+ * routes refuse API keys (403 api_key_refused), so a key holder could not call
+ * them. The server factory lists them only when authMode is 'oauth'; the
+ * keyless/public transport and an API-key session never see them in tools/list.
+ * They count in MCP_TOOL_COUNT (they are registered), and the npm package
+ * ships them, but a key user of the package will not see them in tools/list.
+ * Their auth mode stays 'key' in MCP_TOOL_AUTH (not keyless; the axis has no
+ * 'oauth' value because it describes what a TOOL needs from a key transport).
+ */
+export const MCP_OAUTH_ONLY_TOOLS: readonly McpToolName[] = ['get_my_access'];
+
+/** True when a tool is listed for OAuth connectors only (prefixed or bare name). */
+export function mcpToolOAuthOnly(name: string): boolean {
+  const bare = name.startsWith(MCP_TOOL_PREFIX) ? name.slice(MCP_TOOL_PREFIX.length) : name;
+  return (MCP_OAUTH_ONLY_TOOLS as readonly string[]).includes(bare);
+}
+
 /** True when an OAuth connector may list and call this tool (prefixed or bare name). */
 export function mcpToolOAuthAllowed(name: string): boolean {
   const bare = name.startsWith(MCP_TOOL_PREFIX) ? name.slice(MCP_TOOL_PREFIX.length) : name;
@@ -299,7 +325,13 @@ export const WORKFORCE_TOOL_SET: ReadonlySet<McpToolName> = new Set<McpToolName>
   'get_cost_summary',
 ]);
 
-export const MCP_TOOL_SETS = { workforce: WORKFORCE_TOOL_SET } as const;
+/**
+ * The employee's self view: `tools/list ?set=self`. Exactly the OAuth-only
+ * self tool. The hosted route forces this set for the `employee` role.
+ */
+export const SELF_TOOL_SET: ReadonlySet<McpToolName> = new Set<McpToolName>(['get_my_access']);
+
+export const MCP_TOOL_SETS = { workforce: WORKFORCE_TOOL_SET, self: SELF_TOOL_SET } as const;
 export type McpToolSetName = keyof typeof MCP_TOOL_SETS;
 
 export function mcpToolSet(name: string | null | undefined): ReadonlySet<McpToolName> | undefined {
