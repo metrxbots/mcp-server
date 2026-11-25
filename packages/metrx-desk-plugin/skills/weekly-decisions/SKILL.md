@@ -1,6 +1,6 @@
 ---
 name: weekly-decisions
-description: Walk the manager through this week's decision queue for the AI agents their company employs, one item at a time, and put each decision on record. Needs a Metrx API key with the read scope to read the queue and the write scope to record a decision.
+description: Walk the manager through this week's decision queue for the AI agents their company employs, one item at a time, and put each decision on record. Needs a Metrxbot API key with the read scope to read the queue and the write scope to record a decision.
 ---
 
 # Weekly decisions
@@ -8,11 +8,11 @@ description: Walk the manager through this week's decision queue for the AI agen
 The queue holds the items that need a person: an agent with no job
 contract, an idle agent, a proposal to approve, a blocked signal, a cascade
 graduation, a breaker that fired, evidence about to expire. The manager
-decides; Metrx records.
+decides; Metrxbot records.
 
 ## Steps
 
-1. Call `metrx_get_decision_queue`. It needs a Metrx API key with the `read`
+1. Call `metrx_get_decision_queue`. It needs a Metrxbot API key with the `read`
    scope; without one it returns `auth_required`. Relay that
    `user_message` and point at `/metrx-desk:connect-metrx`.
 2. Relay the queue header: how many items, how many snoozed, and whether
@@ -35,7 +35,7 @@ decides; Metrx records.
 
 4. For each item, show the title, the detail, the age in days and the
    evidence link, then the item's `actions` by label. Ask what they want
-   to do. Approve, snooze, acknowledge and dismiss are taken in the Metrx
+   to do. Approve, snooze, acknowledge and dismiss are taken in the Metrxbot
    dashboard at the evidence link; this plugin does not perform them.
 5. When the manager decides to **expand**, **re-specify**, **combine** or
    **retire** an agent, call `metrx_record_decision` with `agent_key`,

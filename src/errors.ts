@@ -46,7 +46,7 @@ export const MCP_ERRORS: Record<McpErrorClass, McpErrorRow> = {
     http: 401,
     message: 'auth_required',
     user_message:
-      'This tool needs a Metrx API key. Create one under Settings → Security and set METRX_API_KEY, or run the demo with org: "demo".',
+      'This tool needs a Metrxbot API key. Create one under Settings → Security and set METRX_API_KEY, or run the demo with org: "demo".',
   },
   insufficient_scope: {
     code: -32002,
@@ -67,14 +67,14 @@ export const MCP_ERRORS: Record<McpErrorClass, McpErrorRow> = {
     http: 503,
     message: 'limiter_unavailable',
     user_message:
-      'The public desk is briefly unavailable while its rate limiter is down. Try again in about 30 seconds; a Metrx API key is not affected.',
+      'The public desk is briefly unavailable while its rate limiter is down. Try again in about 30 seconds; a Metrxbot API key is not affected.',
   },
   demo_unavailable: {
     code: -32005,
     http: 503,
     message: 'demo_unavailable',
     user_message:
-      'The synthetic Northwind demo is being rebuilt right now. Try again in a few minutes, or run the review on your own data with a Metrx API key.',
+      'The synthetic Northwind demo is being rebuilt right now. Try again in a few minutes, or run the review on your own data with a Metrxbot API key.',
   },
   unknown_agent_key: {
     code: -32006,
@@ -94,7 +94,7 @@ export const MCP_ERRORS: Record<McpErrorClass, McpErrorRow> = {
     http: 502,
     message: 'transport_error',
     user_message:
-      'Metrx could not be reached. Check METRX_MCP_URL (hosted) or your network, then try again.',
+      'Metrxbot could not be reached. Check METRX_MCP_URL (hosted) or your network, then try again.',
   },
   review_unavailable: {
     code: -32008,

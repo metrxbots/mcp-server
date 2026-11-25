@@ -475,24 +475,23 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     expect(MODEL_PRICING['mistral-large'].input_cost_per_1m).toBeGreaterThan(0);
   });
 
-  it('should resolve mistral-medium as alias to mistral-large', () => {
-    const entry = getModelPricing('mistral-medium');
-    expect(entry).toBeDefined();
-    expect(entry!.model).toBe('mistral-large');
-    expect(entry!.provider).toBe('mistral');
+  // An alias to a different model is a pricing bug (review finding 3,
+  // 2026-11-25): these ids used to borrow another model's price.
+  it.each([
+    ['mistral-medium', 'mistral-large'],
+    ['codestral', 'mistral-small-3.1'],
+    ['codestral-latest', 'mistral-small-3.1'],
+    ['mistral-small-latest', 'mistral-small-3.1'],
+    ['embed-english-v3', 'command-r'],
+    ['embed-english-v3.0', 'command-r'],
+  ])('does not price %s as a different model (%s)', (raw) => {
+    expect(getModelPricing(raw)).toBeUndefined();
   });
 
   it('should include mistral-small-3.1 in MODEL_PRICING', () => {
     expect(MODEL_PRICING['mistral-small-3.1']).toBeDefined();
     expect(MODEL_PRICING['mistral-small-3.1'].provider).toBe('mistral');
     expect(MODEL_PRICING['mistral-small-3.1'].tier).toBe('efficient');
-  });
-
-  it('should resolve codestral as alias to mistral-small-3.1', () => {
-    const entry = getModelPricing('codestral');
-    expect(entry).toBeDefined();
-    expect(entry!.model).toBe('mistral-small-3.1');
-    expect(entry!.provider).toBe('mistral');
   });
 
   it('should include command-r-plus in MODEL_PRICING', () => {
@@ -507,30 +506,11 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     expect(MODEL_PRICING['command-r'].tier).toBe('balanced');
   });
 
-  it('should resolve embed-english-v3 alias to command-r', () => {
-    const entry = getModelPricing('embed-english-v3');
-    expect(entry).toBeDefined();
-    expect(entry!.model).toBe('command-r');
-    expect(entry!.provider).toBe('cohere');
-  });
-
   it('getModelPricing should resolve mistral-large-latest alias', () => {
     const entry = getModelPricing('mistral-large-latest');
     expect(entry).toBeDefined();
     expect(entry!.model).toBe('mistral-large');
     expect(entry!.provider).toBe('mistral');
-  });
-
-  it('getModelPricing should resolve mistral-small-latest alias', () => {
-    const entry = getModelPricing('mistral-small-latest');
-    expect(entry).toBeDefined();
-    expect(entry!.model).toBe('mistral-small-3.1');
-  });
-
-  it('getModelPricing should resolve codestral-latest alias', () => {
-    const entry = getModelPricing('codestral-latest');
-    expect(entry).toBeDefined();
-    expect(entry!.model).toBe('mistral-small-3.1');
   });
 
   it('getModelPricing should resolve command-r-plus-08-2024 alias', () => {
@@ -539,10 +519,8 @@ describe('Model Pricing Data — Mistral + Cohere entries (Issue #2)', () => {
     expect(entry!.model).toBe('command-r-plus');
   });
 
-  it('getModelPricing should resolve embed-english-v3.0 alias', () => {
-    const entry = getModelPricing('embed-english-v3.0');
-    expect(entry).toBeDefined();
-    expect(entry!.model).toBe('command-r');
+  it('getModelPricing should resolve command-r-08-2024 to the same model', () => {
+    expect(getModelPricing('command-r-08-2024')!.model).toBe('command-r');
   });
 
   it('getModelPricing should return undefined for unknown model', () => {

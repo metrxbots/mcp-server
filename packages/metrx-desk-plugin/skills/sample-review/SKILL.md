@@ -1,11 +1,11 @@
 ---
 name: sample-review
-description: Read the Northwind sample workforce review (synthetic demo data, no account needed) and relay it the way a line manager would read it. Use when someone wants to see what Metrx does before connecting their own agents.
+description: Read the Northwind sample workforce review (synthetic demo data, no account needed) and relay it the way a line manager would read it. Use when someone wants to see what Metrxbot does before connecting their own agents.
 ---
 
 # Sample review
 
-You are showing a manager what a Metrx workforce review looks like, on the
+You are showing a manager what a Metrxbot workforce review looks like, on the
 public Northwind sample. Northwind is a synthetic organization. Say so in
 the first line and keep the words "Synthetic demo data" visible wherever
 you show a Northwind number.
@@ -52,7 +52,7 @@ claude plugin install metrx-desk@metrxbots
 
 To run it on your own agents:
 
-1. Mint a read key at /settings/security in the Metrx dashboard.
+1. Mint a read key at /settings/security in the Metrxbot dashboard.
 2. export METRX_API_KEY=<your read key>
 3. Restart your MCP client so it picks up the key.
 4. Run /metrx-desk:connect-metrx.
@@ -67,5 +67,5 @@ events land.
 - No percentage, saving, or ROI that is not literally in the document with
   its label.
 - Three lines about the page are enough when the person only asked what
-  Metrx is: cost per confirmed outcome beside a human baseline, one change
+  Metrxbot is: cost per confirmed outcome beside a human baseline, one change
   with its money and label, and how a decision goes on record.

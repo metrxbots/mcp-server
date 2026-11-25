@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "description": "Manage the AI agents your company employs as a line manager would: a workforce review with labelled numbers, job contracts, a vendor bill check, and the weekly decision queue. The sample review needs no account.",
   "author": {
-    "name": "Metrx",
+    "name": "Metrxbot",
     "url": "https://metrxbot.com"
   },
   "homepage": "https://docs.metrxbot.com/desk",

@@ -13,6 +13,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Changed
 - **Workforce review over OAuth.** If you connect through OAuth, `metrx_get_workforce_review` reviews your own org by default. Pass `org=demo` to read the Northwind sample. API-key and keyless callers keep the old default, which is `demo`.
 
+## [0.6.5] - 2026-11-25
+
+### Changed
+- **The built-in model price table now follows the one canonical Metrx model price catalog.** The cost tools that compare models (the cost leak scan and the cross-provider savings checks) used a separate copy of the rates that had drifted. It now carries the catalog's approved rates, so those tools show different dollar figures for the OpenAI GPT-5.6 family (sol, terra, luna), o3, Claude Sonnet 5, Mistral Large, Llama 4 Scout, DeepSeek V4 (off-peak rate) and Gemini 1.5 Flash (corrected).
+- **Model names are matched more carefully.** A dated snapshot, a Bedrock or Vertex spelling, a dashed version (`claude-haiku-4-5`) or a vendor host prefix resolves to the same model's price. A name is never mapped to a different model.
+- The product name in tool errors and in the desk and Codex plugin text is now Metrxbot.
+
+### Added
+- `claude-opus-4.1` and `chatgpt-4o-latest` are priced.
+- **Fine-tunes** (`ft:<base>:<org>:<suffix>:<id>`) are priced only from their own `ft:` row, never at the base model's rate, so an unlisted fine-tune comes back as unpriced.
+- **A deny-list of snapshots with no published price.** Four old GPT-3.5 Turbo snapshots (`gpt-3.5-turbo-0301`, `-0613`, `-16k`, `-16k-0613`) come back as unpriced instead of borrowing the parent model's rate.
+
+No tool is added or removed (43 tools) and no tool input changes. Registry entry is 0.6.5-1 over npm 0.6.5.
+
 ## [0.6.4] - 2026-11-23
 
 ### Added
