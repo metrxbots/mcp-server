@@ -42,7 +42,7 @@ one question, with nothing to export.
      vendor-reported, not Verified. Do not call them measured or confirmed.
 4. End with the `next_step`, every time, as the tool words it: send one
    export, the bill lines with ticket ids plus your ticket export for the same
-   period, and Metrx recounts it. That recount is `metrx_check_vendor_bill`;
+   period, and Metrxbot recounts it. That recount is `metrx_check_vendor_bill`;
    offer the `check-vendor-bill` skill and say what it needs (the bill lines
    with ticket ids and the ticket records for the same period).
 

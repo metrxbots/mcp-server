@@ -14,7 +14,7 @@ description: >
   metrx_get_my_access, is listed only to a person signed in through the connector,
   never to an API key. Works with
   Claude Desktop, Cursor, Windsurf and any MCP client.
-version: '0.6.4'
+version: '0.6.5'
 
 startCommand:
   type: stdio

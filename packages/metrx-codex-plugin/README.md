@@ -1,8 +1,8 @@
 # metrx (Codex plugin)
 
-Connects Codex to your Metrx organisation through the OAuth connector at
-`https://metrxbot.com/api/mcp/connect`. Codex registers itself with the Metrx
-sign-in server (dynamic client registration) and you sign in with your Metrx
+Connects Codex to your Metrxbot organisation through the OAuth connector at
+`https://metrxbot.com/api/mcp/connect`. Codex registers itself with the Metrxbot
+sign-in server (dynamic client registration) and you sign in with your Metrxbot
 account; no API key is copied into Codex.
 
 Install from this repository's marketplace:
@@ -12,7 +12,7 @@ codex plugin marketplace add metrxbots/mcp-server
 codex plugin add metrx@metrxbots
 ```
 
-Sign in to Metrx when Codex asks.
+Sign in to Metrxbot when Codex asks.
 
 What the connector can do, and what it cannot (API-key management, billing,
 outcome ingest stay key-only): https://docs.metrxbot.com/connect
